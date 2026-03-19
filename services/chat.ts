@@ -96,10 +96,10 @@ export function useSendMessage() {
     return useMutation({
         mutationFn: sendMessageFn,
         onSuccess: (data, { enterpriseId, connectionId, leadId }) => {
-            // Adicionar mensagem otimisticamente ao cache
+            // Adicionar ao cache (o socket pode ter chegado primeiro — evitar duplicata)
             queryClient.setQueryData<ChatMessage[]>(
                 keys.chat.messages(connectionId, leadId),
-                (old = []) => [...old, data],
+                (old = []) => old.some(m => m.id === data.id) ? old : [...old, data],
             )
             // Invalidar lista de conversas para atualizar last message
             queryClient.invalidateQueries({

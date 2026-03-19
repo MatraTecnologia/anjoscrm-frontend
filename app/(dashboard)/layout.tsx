@@ -29,10 +29,8 @@ const navItems = [
     { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { href: '/pipeline', icon: Filter, label: 'Funil' },
     { href: '/leads', icon: Users, label: 'Leads' },
-    { href: '/campaigns', icon: Rocket, label: 'Campanhas' },
-    { href: '/integrations', icon: GitBranch, label: 'Integrações' },
+
     { href: '/chat', icon: MessageCircle, label: 'Chat' },
-    { href: '/historico', icon: Activity, label: 'Histórico' },
 ]
 
 const bottomItems = [

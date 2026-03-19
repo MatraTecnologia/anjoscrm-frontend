@@ -36,6 +36,7 @@ export const keys = {
         all: (pipelineId: string) => ['pipelines', pipelineId, 'deals'] as const,
         byStage: (stageId: string) => ['stages', stageId, 'deals'] as const,
         detail: (id: string) => ['deals', id] as const,
+        products: (dealId: string) => ['deals', dealId, 'products'] as const,
     },
 
     connections: {

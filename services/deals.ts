@@ -46,6 +46,21 @@ export type DealWithPipeline = Deal & {
     }
 }
 
+export type DealProduct = {
+    id: string
+    dealId: string
+    productId: string
+    quantity: number
+    unitPrice: number
+    product: {
+        id: string
+        name: string
+        price: number
+        sku: string | null
+        media: { url: string; type: string; isCover: boolean }[]
+    }
+}
+
 export type StageDealsPage = {
     deals: Deal[]
     total: number
@@ -200,6 +215,87 @@ export function useDeleteDeal() {
         mutationFn: deleteDealFn,
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: ['stages'] })
+        },
+    })
+}
+
+// ─── Deal Products ─────────────────────────────────────────────────────────────
+
+async function listDealProductsFn(dealId: string): Promise<DealProduct[]> {
+    const { data } = await api.get<DealProduct[]>(`/deals/${dealId}/products`)
+    return data
+}
+
+async function addDealProductFn({
+    dealId,
+    productId,
+    quantity,
+}: {
+    dealId: string
+    productId: string
+    quantity?: number
+}): Promise<DealProduct> {
+    const { data } = await api.post<DealProduct>(`/deals/${dealId}/products`, { productId, quantity })
+    return data
+}
+
+async function updateDealProductFn({
+    dealId,
+    productId,
+    quantity,
+}: {
+    dealId: string
+    productId: string
+    quantity: number
+}): Promise<DealProduct> {
+    const { data } = await api.patch<DealProduct>(`/deals/${dealId}/products/${productId}`, { quantity })
+    return data
+}
+
+async function removeDealProductFn({
+    dealId,
+    productId,
+}: {
+    dealId: string
+    productId: string
+}): Promise<void> {
+    await api.delete(`/deals/${dealId}/products/${productId}`)
+}
+
+export function useListDealProducts(dealId: string) {
+    return useQuery({
+        queryKey: keys.deals.products(dealId),
+        queryFn: () => listDealProductsFn(dealId),
+        enabled: !!dealId,
+    })
+}
+
+export function useAddDealProduct() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: addDealProductFn,
+        onSuccess: (_data, { dealId }) => {
+            qc.invalidateQueries({ queryKey: keys.deals.products(dealId) })
+        },
+    })
+}
+
+export function useUpdateDealProduct() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: updateDealProductFn,
+        onSuccess: (_data, { dealId }) => {
+            qc.invalidateQueries({ queryKey: keys.deals.products(dealId) })
+        },
+    })
+}
+
+export function useRemoveDealProduct() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: removeDealProductFn,
+        onSuccess: (_data, { dealId }) => {
+            qc.invalidateQueries({ queryKey: keys.deals.products(dealId) })
         },
     })
 }

@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import {
     Search, Filter, MessageCircle, Send, Loader2,
     Check, CheckCheck, Wifi, WifiOff,
-    Phone, MoreVertical, X,
+    Phone, MoreVertical, X, User,
     ImageIcon, VideoIcon, FileIcon, StickerIcon, MicIcon,
 } from 'lucide-react'
 import { formatDistanceToNow, format, isToday, isYesterday } from 'date-fns'
@@ -29,6 +29,8 @@ import {
     type Conversation, type ChatMessage,
 } from '@/services/chat'
 import { useConnections } from '@/services/connections'
+import { useLead } from '@/services/leads'
+import { LeadSheet } from '@/components/lead-sheet'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -316,11 +318,13 @@ function ChatWindow({
     enterpriseId: string
 }) {
     const [input, setInput] = useState('')
+    const [leadSheetOpen, setLeadSheetOpen] = useState(false)
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const textareaRef = useRef<HTMLTextAreaElement>(null)
 
     const { data: messages = [], isLoading } = useMessages(enterpriseId, conv.connectionId, conv.leadId)
     const { mutate: send, isPending: sending } = useSendMessage()
+    const { data: fullLead } = useLead(enterpriseId, conv.leadId, leadSheetOpen)
 
     // Auto scroll
     useEffect(() => {
@@ -346,7 +350,10 @@ function ChatWindow({
             content,
         }, {
             onSuccess: () => setInput(''),
-            onError: (err: Error) => toast.error(err.message),
+            onError: (err: unknown) => {
+                const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
+                toast.error(msg ?? 'Falha ao enviar mensagem.')
+            },
         })
     }
 
@@ -415,6 +422,15 @@ function ChatWindow({
                         <Phone className="size-4" />
                     </Button>
                 )}
+                <Button
+                    size="icon"
+                    variant="ghost"
+                    className="size-8 text-muted-foreground"
+                    onClick={() => setLeadSheetOpen(true)}
+                    title="Ver dados do lead"
+                >
+                    <User className="size-4" />
+                </Button>
                 <Button size="icon" variant="ghost" className="size-8 text-muted-foreground">
                     <MoreVertical className="size-4" />
                 </Button>
@@ -490,6 +506,14 @@ function ChatWindow({
                     Shift + Enter para quebrar linha
                 </p>
             </div>
+
+            <LeadSheet
+                lead={fullLead ?? null}
+                enterpriseId={enterpriseId}
+                open={leadSheetOpen}
+                onOpenChange={setLeadSheetOpen}
+                onEdit={() => setLeadSheetOpen(false)}
+            />
         </div>
     )
 }

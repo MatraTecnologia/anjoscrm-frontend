@@ -22,7 +22,8 @@ import {
     MoreHorizontal, Plus, Search, SlidersHorizontal, ArrowUpDown,
     Loader2, Banknote, CalendarDays, Tag as TagIcon,
     MessageCircle, ChevronDown, Trash2, ArrowLeft, UserPlus,
-    Pencil, Trophy, XCircle, User,
+    Pencil, Trophy, XCircle, User, Send, X, Check, WifiOff,
+    Package, Minus,
 } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
@@ -41,10 +42,15 @@ import { usePipelineSocket } from '@/hooks/use-pipeline-socket'
 import { useGetPipeline, type PipelineStage } from '@/services/pipelines'
 import {
     useStageDeals, useCreateDeal, useUpdateDeal, useDeleteDeal,
-    type Deal, type StageDealsPage,
+    useListDealProducts, useAddDealProduct, useUpdateDealProduct, useRemoveDealProduct,
+    type Deal, type DealLead, type StageDealsPage,
 } from '@/services/deals'
+import { useListProducts } from '@/services/products'
 import { useLeads, useCreateLead, useUpdateLead } from '@/services/leads'
 import { useMembers } from '@/services/enterprises'
+import { useListTags } from '@/services/tags'
+import { useConnections } from '@/services/connections'
+import { useMessages, useSendMessage, useChatSocket } from '@/services/chat'
 import { keys } from '@/lib/keys'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -89,12 +95,14 @@ function DealCardBody({
     stages,
     enterpriseId,
     handleProps,
+    onWhatsappClick,
 }: {
     deal: Deal
     index: number
     stages: PipelineStage[]
     enterpriseId: string
     handleProps?: React.HTMLAttributes<HTMLElement>
+    onWhatsappClick?: (lead: DealLead) => void
 }) {
     const qc = useQueryClient()
     const updateDeal = useUpdateDeal()
@@ -107,6 +115,15 @@ function DealCardBody({
     const [editTitle, setEditTitle] = useState('')
     const [editValue, setEditValue] = useState('')
     const [memberSearch, setMemberSearch] = useState('')
+    const [tagPickerOpen, setTagPickerOpen] = useState(false)
+    const [productSearch, setProductSearch] = useState('')
+    const { data: allTags = [] } = useListTags(enterpriseId)
+
+    const { data: dealProducts = [] } = useListDealProducts(sheetOpen ? deal.id : '')
+    const { data: allProducts = [] } = useListProducts(enterpriseId, productSearch ? { q: productSearch } : undefined)
+    const addDealProduct = useAddDealProduct()
+    const updateDealProduct = useUpdateDealProduct()
+    const removeDealProduct = useRemoveDealProduct()
 
     const ganhoStage = stages.find(s => s.name.toLowerCase().includes('ganho'))
     const perdidoStage = stages.find(s =>
@@ -128,6 +145,7 @@ function DealCardBody({
         setEditTitle(deal.title)
         setEditValue(deal.value != null ? String(deal.value) : '')
         setMemberSearch('')
+        setProductSearch('')
         setSheetOpen(true)
     }
 
@@ -169,6 +187,20 @@ function DealCardBody({
                     qc.invalidateQueries({ queryKey: keys.deals.byStage(deal.stageId) })
                     toast.success(userId ? 'Atendente atribuído!' : 'Atendente removido.')
                 },
+                onError: (e) => toast.error(e.message),
+            },
+        )
+    }
+
+    function handleToggleTag(tagId: string) {
+        const currentIds = deal.lead.tags.map(t => t.id)
+        const newIds = currentIds.includes(tagId)
+            ? currentIds.filter(id => id !== tagId)
+            : [...currentIds, tagId]
+        updateLead.mutate(
+            { id: deal.leadId, enterpriseId, payload: { tagIds: newIds } },
+            {
+                onSuccess: () => qc.invalidateQueries({ queryKey: keys.deals.byStage(deal.stageId) }),
                 onError: (e) => toast.error(e.message),
             },
         )
@@ -337,22 +369,57 @@ function DealCardBody({
                 {/* Footer */}
                 <div className="px-3 pb-2 flex items-center justify-end gap-1 border-t mt-1 pt-1.5">
                     {deal.lead.phone && (
-                        <a
-                            href={`https://wa.me/${deal.lead.phone.replace(/\D/g, '')}`}
-                            target="_blank"
-                            rel="noreferrer"
+                        <button
                             className="p-1 rounded hover:bg-muted transition-colors text-green-600"
                             onPointerDown={(e) => e.stopPropagation()}
+                            onClick={() => onWhatsappClick?.(deal.lead)}
                         >
                             <MessageCircle className="size-3.5" />
-                        </a>
+                        </button>
                     )}
-                    <button
-                        className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground"
-                        onPointerDown={(e) => e.stopPropagation()}
-                    >
-                        <TagIcon className="size-3.5" />
-                    </button>
+                    <Popover open={tagPickerOpen} onOpenChange={setTagPickerOpen}>
+                        <PopoverTrigger asChild>
+                            <button
+                                className={cn(
+                                    'p-1 rounded hover:bg-muted transition-colors',
+                                    deal.lead.tags.length > 0 ? 'text-blue-600' : 'text-muted-foreground',
+                                )}
+                                onPointerDown={(e) => e.stopPropagation()}
+                            >
+                                <TagIcon className="size-3.5" />
+                            </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-52 p-0" align="end" side="top" sideOffset={4}>
+                            <div className="px-3 py-2 border-b">
+                                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+                                    Etiquetas
+                                </p>
+                            </div>
+                            <div className="max-h-44 overflow-y-auto py-1">
+                                {allTags.length === 0 ? (
+                                    <p className="text-xs text-muted-foreground text-center py-4">Nenhuma etiqueta</p>
+                                ) : (
+                                    allTags.map(tag => {
+                                        const isSelected = deal.lead.tags.some(t => t.id === tag.id)
+                                        return (
+                                            <button
+                                                key={tag.id}
+                                                onClick={() => handleToggleTag(tag.id)}
+                                                className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-muted transition-colors text-xs"
+                                            >
+                                                <span
+                                                    className="size-2.5 rounded-full flex-shrink-0"
+                                                    style={{ backgroundColor: tag.color }}
+                                                />
+                                                <span className="flex-1 text-left">{tag.name}</span>
+                                                {isSelected && <Check className="size-3 text-blue-600 flex-shrink-0" />}
+                                            </button>
+                                        )
+                                    })
+                                )}
+                            </div>
+                        </PopoverContent>
+                    </Popover>
                 </div>
             </div>
 
@@ -482,6 +549,101 @@ function DealCardBody({
                                 ))}
                             </div>
                         </div>
+
+                        {/* Produtos */}
+                        <div className="flex flex-col gap-1.5">
+                            <Label className="text-xs text-muted-foreground">Produtos</Label>
+
+                            {/* Lista de produtos já adicionados */}
+                            {dealProducts.length > 0 && (
+                                <div className="flex flex-col gap-1 mb-1">
+                                    {dealProducts.map(dp => (
+                                        <div key={dp.id} className="flex items-center gap-2 px-2.5 py-1.5 rounded-md border bg-muted/20 text-xs">
+                                            <Package className="size-3 flex-shrink-0 text-muted-foreground" />
+                                            <span className="flex-1 truncate">{dp.product.name}</span>
+                                            <div className="flex items-center gap-0.5">
+                                                <button
+                                                    onClick={() => updateDealProduct.mutate({ dealId: deal.id, productId: dp.productId, quantity: Math.max(1, dp.quantity - 1) })}
+                                                    className="size-5 rounded flex items-center justify-center hover:bg-muted border"
+                                                >
+                                                    <Minus className="size-3" />
+                                                </button>
+                                                <span className="w-6 text-center font-medium">{dp.quantity}</span>
+                                                <button
+                                                    onClick={() => updateDealProduct.mutate({ dealId: deal.id, productId: dp.productId, quantity: dp.quantity + 1 })}
+                                                    className="size-5 rounded flex items-center justify-center hover:bg-muted border"
+                                                >
+                                                    <Plus className="size-3" />
+                                                </button>
+                                            </div>
+                                            <span className="text-muted-foreground text-[11px] min-w-[4.5rem] text-right">
+                                                {formatBRL(dp.unitPrice * dp.quantity)}
+                                            </span>
+                                            <button
+                                                onClick={() => removeDealProduct.mutate({ dealId: deal.id, productId: dp.productId })}
+                                                className="p-0.5 rounded hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-500 text-muted-foreground/40 transition-colors"
+                                            >
+                                                <X className="size-3" />
+                                            </button>
+                                        </div>
+                                    ))}
+                                    <div className="flex justify-end pr-1">
+                                        <span className="text-[11px] text-muted-foreground">
+                                            Total: <strong className="text-foreground">
+                                                {formatBRL(dealProducts.reduce((sum, dp) => sum + dp.unitPrice * dp.quantity, 0))}
+                                            </strong>
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Busca para adicionar produto */}
+                            <div className="relative">
+                                <Search className="absolute left-2.5 top-2 size-3.5 text-muted-foreground" />
+                                <input
+                                    className="w-full pl-8 pr-3 py-1.5 text-xs border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                                    placeholder="Buscar produto para adicionar..."
+                                    value={productSearch}
+                                    onChange={(e) => setProductSearch(e.target.value)}
+                                />
+                            </div>
+                            {productSearch && (
+                                <div className="flex flex-col rounded-md border overflow-hidden max-h-36 overflow-y-auto">
+                                    {allProducts.length === 0 ? (
+                                        <p className="text-xs text-muted-foreground text-center py-4">Nenhum produto encontrado</p>
+                                    ) : (
+                                        allProducts.map(p => {
+                                            const alreadyAdded = dealProducts.some(dp => dp.productId === p.id)
+                                            return (
+                                                <button
+                                                    key={p.id}
+                                                    disabled={alreadyAdded || addDealProduct.isPending}
+                                                    onClick={() => {
+                                                        if (alreadyAdded) return
+                                                        addDealProduct.mutate(
+                                                            { dealId: deal.id, productId: p.id, quantity: 1 },
+                                                            { onSuccess: () => setProductSearch('') },
+                                                        )
+                                                    }}
+                                                    className={cn(
+                                                        'flex items-center gap-2 px-3 py-2 text-xs hover:bg-muted transition-colors text-left',
+                                                        alreadyAdded && 'opacity-50 cursor-default',
+                                                    )}
+                                                >
+                                                    <Package className="size-3 flex-shrink-0 text-muted-foreground" />
+                                                    <span className="flex-1 truncate">{p.name}</span>
+                                                    <span className="text-muted-foreground flex-shrink-0">{formatBRL(p.price)}</span>
+                                                    {alreadyAdded
+                                                        ? <Check className="size-3 text-blue-500 flex-shrink-0" />
+                                                        : <Plus className="size-3 text-muted-foreground flex-shrink-0" />
+                                                    }
+                                                </button>
+                                            )
+                                        })
+                                    )}
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     {/* Footer */}
@@ -516,11 +678,13 @@ function DealCard({
     index,
     stages,
     enterpriseId,
+    onWhatsappClick,
 }: {
     deal: Deal
     index: number
     stages: PipelineStage[]
     enterpriseId: string
+    onWhatsappClick?: (lead: DealLead) => void
 }) {
     const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
         id: deal.id,
@@ -539,6 +703,7 @@ function DealCard({
                 stages={stages}
                 enterpriseId={enterpriseId}
                 handleProps={listeners}
+                onWhatsappClick={onWhatsappClick}
             />
         </div>
     )
@@ -924,6 +1089,178 @@ function DragActionBar({ visible, stages }: { visible: boolean; stages: Pipeline
     )
 }
 
+// ─── Chat Widget ──────────────────────────────────────────────────────────────
+
+function ChatWidget({
+    lead,
+    enterpriseId,
+    onClose,
+}: {
+    lead: DealLead
+    enterpriseId: string
+    onClose: () => void
+}) {
+    const { data: connections = [] } = useConnections(enterpriseId)
+    const whatsappConns = connections.filter(c => c.type === 'WHATSAPP' && c.status === 'CONNECTED')
+
+    const [selectedConn, setSelectedConn] = useState('')
+    const [message, setMessage] = useState('')
+    const messagesEndRef = useRef<HTMLDivElement>(null)
+
+    useEffect(() => {
+        if (whatsappConns.length > 0 && !selectedConn) {
+            setSelectedConn(whatsappConns[0].id)
+        }
+    }, [whatsappConns.length])
+
+    const { data: messages = [], isLoading: messagesLoading } = useMessages(
+        enterpriseId,
+        selectedConn,
+        lead.id,
+    )
+    const sendMsg = useSendMessage()
+    useChatSocket(enterpriseId)
+
+    useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }, [messages.length])
+
+    function handleSend() {
+        if (!message.trim() || !selectedConn) return
+        sendMsg.mutate(
+            { enterpriseId, connectionId: selectedConn, leadId: lead.id, content: message.trim() },
+            {
+                onSuccess: () => setMessage(''),
+                onError: (e) => toast.error(e.message),
+            },
+        )
+    }
+
+    const color = avatarColor(lead.name)
+
+    return (
+        <div className="fixed bottom-6 right-6 z-50 w-80 flex flex-col rounded-xl border bg-background shadow-2xl overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center gap-2 px-3 py-2.5 bg-green-600 text-white flex-shrink-0">
+                {lead.image ? (
+                    <img src={lead.image} alt={lead.name} className="size-7 rounded-full object-cover flex-shrink-0" />
+                ) : (
+                    <div
+                        className="size-7 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[10px] font-bold"
+                        style={{ backgroundColor: color }}
+                    >
+                        {initials(lead.name)}
+                    </div>
+                )}
+                <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold truncate leading-tight">{lead.name}</p>
+                    {lead.phone && (
+                        <p className="text-[10px] text-green-100 truncate">{lead.phone}</p>
+                    )}
+                </div>
+                <button
+                    onClick={onClose}
+                    className="p-1 rounded hover:bg-green-500 transition-colors flex-shrink-0"
+                >
+                    <X className="size-4" />
+                </button>
+            </div>
+
+            {whatsappConns.length === 0 ? (
+                <div className="flex flex-col items-center justify-center gap-3 py-8 px-4 text-center">
+                    <WifiOff className="size-8 text-muted-foreground" />
+                    <div>
+                        <p className="text-sm font-medium">Nenhuma conexão WhatsApp</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                            Crie uma conexão WhatsApp para enviar mensagens.
+                        </p>
+                    </div>
+                    <a
+                        href="/connections"
+                        className="text-xs text-blue-600 hover:underline font-medium"
+                    >
+                        Criar conexão →
+                    </a>
+                </div>
+            ) : (
+                <>
+                    {/* Seletor de conexão (só aparece se tiver mais de uma) */}
+                    {whatsappConns.length > 1 && (
+                        <div className="px-3 py-2 border-b flex-shrink-0">
+                            <select
+                                className="w-full text-xs border rounded-md px-2 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                                value={selectedConn}
+                                onChange={(e) => setSelectedConn(e.target.value)}
+                            >
+                                {whatsappConns.map(c => (
+                                    <option key={c.id} value={c.id}>{c.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+
+                    {/* Mensagens */}
+                    <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-1.5 max-h-64 min-h-28">
+                        {messagesLoading ? (
+                            <div className="flex justify-center py-6">
+                                <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                            </div>
+                        ) : messages.length === 0 ? (
+                            <p className="text-xs text-muted-foreground text-center py-6">
+                                Nenhuma mensagem ainda
+                            </p>
+                        ) : (
+                            messages.map(msg => (
+                                <div
+                                    key={msg.id}
+                                    className={cn(
+                                        'max-w-[85%] px-2.5 py-1.5 rounded-lg text-xs',
+                                        msg.direction === 'OUTBOUND'
+                                            ? 'self-end bg-green-100 dark:bg-green-900/40 text-green-900 dark:text-green-100'
+                                            : 'self-start bg-muted text-foreground',
+                                    )}
+                                >
+                                    <p className="break-words">{msg.content}</p>
+                                    <p className="text-[9px] text-muted-foreground mt-0.5 text-right">
+                                        {format(new Date(msg.sentAt), 'HH:mm')}
+                                    </p>
+                                </div>
+                            ))
+                        )}
+                        <div ref={messagesEndRef} />
+                    </div>
+
+                    {/* Input */}
+                    <div className="flex items-center gap-1.5 px-2 py-2 border-t flex-shrink-0">
+                        <input
+                            className="flex-1 text-xs px-2.5 py-1.5 border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                            placeholder="Digite uma mensagem..."
+                            value={message}
+                            onChange={(e) => setMessage(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault()
+                                    handleSend()
+                                }
+                            }}
+                        />
+                        <button
+                            onClick={handleSend}
+                            disabled={!message.trim() || sendMsg.isPending}
+                            className="p-1.5 rounded-md bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-colors flex-shrink-0"
+                        >
+                            {sendMsg.isPending
+                                ? <Loader2 className="size-3.5 animate-spin" />
+                                : <Send className="size-3.5" />
+                            }
+                        </button>
+                    </div>
+                </>
+            )}
+        </div>
+    )
+}
+
 // ─── Coluna kanban ────────────────────────────────────────────────────────────
 
 function KanbanColumn({
@@ -932,12 +1269,14 @@ function KanbanColumn({
     pipelineId,
     enterpriseId,
     sort,
+    onWhatsappClick,
 }: {
     stage: PipelineStage
     stages: PipelineStage[]
     pipelineId: string
     enterpriseId: string
     sort: Sort
+    onWhatsappClick?: (lead: DealLead) => void
 }) {
     const scrollRef = useRef<HTMLDivElement>(null)
     const { setNodeRef: setDropRef, isOver } = useDroppable({ id: stage.id })
@@ -1029,6 +1368,7 @@ function KanbanColumn({
                                                 index={vItem.index}
                                                 stages={stages}
                                                 enterpriseId={enterpriseId}
+                                                onWhatsappClick={onWhatsappClick}
                                             />
                                         )}
                                     </div>
@@ -1068,6 +1408,11 @@ export default function PipelinePage() {
     const [sort, setSort] = useState<Sort>('recent')
     const [activeTab, setActiveTab] = useState<Tab>('recent')
     const [activeDeal, setActiveDeal] = useState<Deal | null>(null)
+    const [chatLead, setChatLead] = useState<DealLead | null>(null)
+
+    function handleWhatsappClick(lead: DealLead) {
+        setChatLead(prev => prev?.id === lead.id ? null : lead)
+    }
 
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -1230,6 +1575,7 @@ export default function PipelinePage() {
                                 pipelineId={pipeline.id}
                                 enterpriseId={enterpriseId}
                                 sort={sort}
+                                onWhatsappClick={handleWhatsappClick}
                             />
                         ))}
                     </div>
@@ -1249,6 +1595,15 @@ export default function PipelinePage() {
                     )}
                 </DragOverlay>
             </DndContext>
+
+            {/* Widget de chat WhatsApp */}
+            {chatLead && (
+                <ChatWidget
+                    lead={chatLead}
+                    enterpriseId={enterpriseId}
+                    onClose={() => setChatLead(null)}
+                />
+            )}
         </div>
     )
 }

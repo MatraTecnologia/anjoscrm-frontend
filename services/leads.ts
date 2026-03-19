@@ -136,7 +136,22 @@ async function deleteLeadFn({
     })
 }
 
+async function getLeadFn(enterpriseId: string, leadId: string): Promise<Lead> {
+    const { data } = await api.get<Lead>(`/leads/detail/${leadId}`, {
+        headers: { 'X-Enterprise-Id': enterpriseId },
+    })
+    return data
+}
+
 // ─── Hooks ────────────────────────────────────────────────────────────────────
+
+export function useLead(enterpriseId: string, leadId: string, enabled = true) {
+    return useQuery({
+        queryKey: keys.leads.detail(leadId),
+        queryFn: () => getLeadFn(enterpriseId, leadId),
+        enabled: enabled && !!enterpriseId && !!leadId,
+    })
+}
 
 export function useLeads(enterpriseId: string, q?: string) {
     return useQuery({

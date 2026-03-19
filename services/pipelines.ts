@@ -1,0 +1,408 @@
+'use client'
+
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { api } from '@/lib/api'
+import { keys } from '@/lib/keys'
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export type PipelineStage = {
+    id: string
+    pipelineId: string
+    name: string
+    color: string
+    order: number
+    createdAt: string
+    _count?: { deals: number }
+}
+
+export type Pipeline = {
+    id: string
+    enterpriseId: string
+    groupId: string | null
+    name: string
+    description: string | null
+    color: string
+    order: number
+    createdAt: string
+    stages: PipelineStage[]
+    _count?: { stages: number; deals: number }
+}
+
+export type PipelineGroup = {
+    id: string
+    enterpriseId: string
+    name: string
+    order: number
+    createdAt: string
+    pipelines: Pipeline[]
+}
+
+// ─── API — Groups ──────────────────────────────────────────────────────────────
+
+async function listGroupsFn(enterpriseId: string): Promise<PipelineGroup[]> {
+    const { data } = await api.get<PipelineGroup[]>(`/pipelines/groups/${enterpriseId}`, {
+        headers: { 'X-Enterprise-Id': enterpriseId },
+    })
+    return data
+}
+
+async function createGroupFn({
+    enterpriseId,
+    name,
+}: {
+    enterpriseId: string
+    name: string
+}): Promise<PipelineGroup> {
+    const { data } = await api.post<PipelineGroup>(
+        `/pipelines/groups/${enterpriseId}`,
+        { name },
+        { headers: { 'X-Enterprise-Id': enterpriseId } },
+    )
+    return data
+}
+
+async function updateGroupFn({
+    id,
+    enterpriseId,
+    name,
+}: {
+    id: string
+    enterpriseId: string
+    name?: string
+}): Promise<PipelineGroup> {
+    const { data } = await api.patch<PipelineGroup>(
+        `/pipelines/groups/${id}`,
+        { name },
+        { headers: { 'X-Enterprise-Id': enterpriseId } },
+    )
+    return data
+}
+
+async function deleteGroupFn({
+    id,
+    enterpriseId,
+}: {
+    id: string
+    enterpriseId: string
+}): Promise<void> {
+    await api.delete(`/pipelines/groups/${id}`, {
+        headers: { 'X-Enterprise-Id': enterpriseId },
+    })
+}
+
+async function reorderGroupsFn({
+    enterpriseId,
+    items,
+}: {
+    enterpriseId: string
+    items: { id: string; order: number }[]
+}): Promise<void> {
+    await api.patch('/pipelines/groups-reorder', items, {
+        headers: { 'X-Enterprise-Id': enterpriseId },
+    })
+}
+
+async function reorderPipelinesFn({
+    enterpriseId,
+    items,
+}: {
+    enterpriseId: string
+    items: { id: string; order: number; groupId?: string | null }[]
+}): Promise<void> {
+    await api.patch('/pipelines/reorder', items, {
+        headers: { 'X-Enterprise-Id': enterpriseId },
+    })
+}
+
+// ─── API — Pipelines ──────────────────────────────────────────────────────────
+
+async function listPipelinesFn(enterpriseId: string): Promise<Pipeline[]> {
+    const { data } = await api.get<Pipeline[]>(`/pipelines/${enterpriseId}`, {
+        headers: { 'X-Enterprise-Id': enterpriseId },
+    })
+    return data
+}
+
+async function getPipelineFn(id: string, enterpriseId: string): Promise<Pipeline> {
+    const { data } = await api.get<Pipeline>(`/pipelines/detail/${id}`, {
+        headers: { 'X-Enterprise-Id': enterpriseId },
+    })
+    return data
+}
+
+async function createPipelineFn({
+    enterpriseId,
+    name,
+    color,
+    description,
+    groupId,
+}: {
+    enterpriseId: string
+    name: string
+    color?: string
+    description?: string
+    groupId?: string | null
+}): Promise<Pipeline> {
+    const { data } = await api.post<Pipeline>(
+        `/pipelines/${enterpriseId}`,
+        { name, color, description, groupId },
+        { headers: { 'X-Enterprise-Id': enterpriseId } },
+    )
+    return data
+}
+
+async function updatePipelineFn({
+    id,
+    enterpriseId,
+    name,
+    color,
+    description,
+    groupId,
+}: {
+    id: string
+    enterpriseId: string
+    name?: string
+    color?: string
+    description?: string
+    groupId?: string | null
+}): Promise<Pipeline> {
+    const { data } = await api.patch<Pipeline>(
+        `/pipelines/${id}`,
+        { name, color, description, groupId },
+        { headers: { 'X-Enterprise-Id': enterpriseId } },
+    )
+    return data
+}
+
+async function deletePipelineFn({
+    id,
+    enterpriseId,
+}: {
+    id: string
+    enterpriseId: string
+}): Promise<void> {
+    await api.delete(`/pipelines/${id}`, {
+        headers: { 'X-Enterprise-Id': enterpriseId },
+    })
+}
+
+async function migrateKpiStagesFn(enterpriseId: string): Promise<{ message: string; added: number }> {
+    const { data } = await api.post<{ message: string; added: number }>(
+        `/pipelines/migrate-kpi-stages/${enterpriseId}`,
+        {},
+        { headers: { 'X-Enterprise-Id': enterpriseId } },
+    )
+    return data
+}
+
+// ─── API — Stages ─────────────────────────────────────────────────────────────
+
+async function createStageFn({
+    pipelineId,
+    enterpriseId,
+    name,
+    color,
+}: {
+    pipelineId: string
+    enterpriseId: string
+    name: string
+    color?: string
+}): Promise<PipelineStage> {
+    const { data } = await api.post<PipelineStage>(
+        `/pipelines/${pipelineId}/stages`,
+        { name, color },
+        { headers: { 'X-Enterprise-Id': enterpriseId } },
+    )
+    return data
+}
+
+async function updateStageFn({
+    stageId,
+    enterpriseId,
+    name,
+    color,
+    order,
+}: {
+    stageId: string
+    enterpriseId: string
+    name?: string
+    color?: string
+    order?: number
+}): Promise<PipelineStage> {
+    const { data } = await api.patch<PipelineStage>(
+        `/pipelines/stages/${stageId}`,
+        { name, color, order },
+        { headers: { 'X-Enterprise-Id': enterpriseId } },
+    )
+    return data
+}
+
+async function deleteStageFn({
+    stageId,
+    enterpriseId,
+}: {
+    stageId: string
+    enterpriseId: string
+}): Promise<void> {
+    await api.delete(`/pipelines/stages/${stageId}`, {
+        headers: { 'X-Enterprise-Id': enterpriseId },
+    })
+}
+
+// ─── Hooks — Groups ───────────────────────────────────────────────────────────
+
+export function useListGroups(enterpriseId: string) {
+    return useQuery({
+        queryKey: keys.pipelines.groups(enterpriseId),
+        queryFn: () => listGroupsFn(enterpriseId),
+        enabled: !!enterpriseId,
+    })
+}
+
+export function useCreateGroup() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: createGroupFn,
+        onSuccess: (_data, { enterpriseId }) => {
+            qc.invalidateQueries({ queryKey: keys.pipelines.groups(enterpriseId) })
+        },
+    })
+}
+
+export function useUpdateGroup() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: updateGroupFn,
+        onSuccess: (_data, { enterpriseId }) => {
+            qc.invalidateQueries({ queryKey: keys.pipelines.groups(enterpriseId) })
+        },
+    })
+}
+
+export function useDeleteGroup() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: deleteGroupFn,
+        onSuccess: (_data, { enterpriseId }) => {
+            qc.invalidateQueries({ queryKey: keys.pipelines.groups(enterpriseId) })
+            qc.invalidateQueries({ queryKey: keys.pipelines.all(enterpriseId) })
+        },
+    })
+}
+
+export function useReorderGroups() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: reorderGroupsFn,
+        onSuccess: (_data, { enterpriseId }) => {
+            qc.invalidateQueries({ queryKey: keys.pipelines.groups(enterpriseId) })
+        },
+    })
+}
+
+export function useReorderPipelines() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: reorderPipelinesFn,
+        onSuccess: (_data, { enterpriseId }) => {
+            qc.invalidateQueries({ queryKey: keys.pipelines.all(enterpriseId) })
+            qc.invalidateQueries({ queryKey: keys.pipelines.groups(enterpriseId) })
+        },
+    })
+}
+
+// ─── Hooks — Pipelines ────────────────────────────────────────────────────────
+
+export function useListPipelines(enterpriseId: string) {
+    return useQuery({
+        queryKey: keys.pipelines.all(enterpriseId),
+        queryFn: () => listPipelinesFn(enterpriseId),
+        enabled: !!enterpriseId,
+    })
+}
+
+export function useGetPipeline(id: string, enterpriseId: string) {
+    return useQuery({
+        queryKey: keys.pipelines.detail(id),
+        queryFn: () => getPipelineFn(id, enterpriseId),
+        enabled: !!id && !!enterpriseId,
+    })
+}
+
+export function useCreatePipeline() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: createPipelineFn,
+        onSuccess: (_data, { enterpriseId }) => {
+            qc.invalidateQueries({ queryKey: keys.pipelines.all(enterpriseId) })
+            qc.invalidateQueries({ queryKey: keys.pipelines.groups(enterpriseId) })
+        },
+    })
+}
+
+export function useUpdatePipeline() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: updatePipelineFn,
+        onSuccess: (data, { enterpriseId }) => {
+            qc.invalidateQueries({ queryKey: keys.pipelines.all(enterpriseId) })
+            qc.invalidateQueries({ queryKey: keys.pipelines.groups(enterpriseId) })
+            qc.invalidateQueries({ queryKey: keys.pipelines.detail(data.id) })
+        },
+    })
+}
+
+export function useDeletePipeline() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: deletePipelineFn,
+        onSuccess: (_data, { enterpriseId }) => {
+            qc.invalidateQueries({ queryKey: keys.pipelines.all(enterpriseId) })
+            qc.invalidateQueries({ queryKey: keys.pipelines.groups(enterpriseId) })
+        },
+    })
+}
+
+export function useMigrateKpiStages() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: migrateKpiStagesFn,
+        onSuccess: (_data, enterpriseId) => {
+            qc.invalidateQueries({ queryKey: keys.pipelines.all(enterpriseId) })
+            qc.invalidateQueries({ queryKey: keys.pipelines.groups(enterpriseId) })
+        },
+    })
+}
+
+// ─── Hooks — Stages ───────────────────────────────────────────────────────────
+
+export function useCreateStage() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: createStageFn,
+        onSuccess: (_data, { pipelineId }) => {
+            qc.invalidateQueries({ queryKey: keys.pipelines.detail(pipelineId) })
+        },
+    })
+}
+
+export function useUpdateStage() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: updateStageFn,
+        onSuccess: (data) => {
+            qc.invalidateQueries({ queryKey: keys.pipelines.detail(data.pipelineId) })
+        },
+    })
+}
+
+export function useDeleteStage() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: deleteStageFn,
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ['pipelines'] })
+        },
+    })
+}

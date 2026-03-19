@@ -1284,10 +1284,14 @@ function KanbanColumn({
     const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
         useStageDeals(stage.id, enterpriseId, sort)
 
-    const allDeals = useMemo(
-        () => data?.pages.flatMap((p: StageDealsPage) => p.deals) ?? [],
-        [data],
-    )
+    const allDeals = useMemo(() => {
+        const seen = new Set<string>()
+        return (data?.pages.flatMap((p: StageDealsPage) => p.deals) ?? []).filter(d => {
+            if (seen.has(d.id)) return false
+            seen.add(d.id)
+            return true
+        })
+    }, [data])
     const total = data?.pages[0]?.total ?? stage._count?.deals ?? 0
     const totalValue = data?.pages[0]?.totalValue ?? 0
 

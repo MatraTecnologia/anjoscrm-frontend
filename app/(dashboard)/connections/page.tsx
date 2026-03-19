@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import {
     Plus, Globe, Trash2, WifiOff, QrCode, RefreshCw, Loader2,
-    Check, Wifi,
+    Check, Wifi, Webhook,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -22,7 +22,7 @@ import {
 import { useEnterprise } from '@/hooks/use-enterprise'
 import {
     useConnections, useCreateConnection, useDeleteConnection,
-    useConnectionQr, useConnectionStatus, useDisconnect,
+    useConnectionQr, useConnectionStatus, useDisconnect, useConfigureWebhook,
     type Connection, type ConnectionType,
 } from '@/services/connections'
 import { cn } from '@/lib/utils'
@@ -332,11 +332,22 @@ function ConnectionCard({
     const [showQr, setShowQr] = useState(false)
 
     const { mutate: disconnect, isPending: disconnecting } = useDisconnect()
+    const { mutate: configWebhook, isPending: configuringWebhook } = useConfigureWebhook()
 
     function handleDisconnect() {
         disconnect({ id: connection.id, enterpriseId }, {
             onSuccess: () => toast.success(`${connection.name} desconectado.`),
             onError: (err: Error) => toast.error(err.message),
+        })
+    }
+
+    function handleConfigureWebhook() {
+        configWebhook({ id: connection.id, enterpriseId }, {
+            onSuccess: () => toast.success('Webhook configurado com sucesso!'),
+            onError: (err: unknown) => {
+                const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
+                toast.error(msg ?? 'Erro ao configurar webhook.')
+            },
         })
     }
 
@@ -375,6 +386,23 @@ function ConnectionCard({
                         <Button size="sm" variant="outline" onClick={() => setShowQr(true)} className="h-7 text-xs gap-1.5">
                             <QrCode className="size-3.5" />
                             Conectar
+                        </Button>
+                    )}
+
+                    {isWhatsApp && (
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={handleConfigureWebhook}
+                            disabled={configuringWebhook}
+                            className="h-7 text-xs gap-1.5"
+                            title="Registrar/atualizar webhook na uazapiGO"
+                        >
+                            {configuringWebhook
+                                ? <Loader2 className="size-3.5 animate-spin" />
+                                : <Webhook className="size-3.5" />
+                            }
+                            Webhook
                         </Button>
                     )}
 

@@ -88,6 +88,21 @@ async function getStatusFn({
     return data
 }
 
+async function configureWebhookFn({
+    id,
+    enterpriseId,
+}: {
+    id: string
+    enterpriseId: string
+}): Promise<{ ok: boolean; webhookUrl: string }> {
+    const { data } = await api.post<{ ok: boolean; webhookUrl: string }>(
+        `/connections/${id}/webhook`,
+        null,
+        { headers: { 'X-Enterprise-Id': enterpriseId } },
+    )
+    return data
+}
+
 async function disconnectFn({
     id,
     enterpriseId,
@@ -158,4 +173,8 @@ export function useDisconnect() {
             queryClient.invalidateQueries({ queryKey: keys.connections.all(enterpriseId) })
         },
     })
+}
+
+export function useConfigureWebhook() {
+    return useMutation({ mutationFn: configureWebhookFn })
 }

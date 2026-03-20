@@ -67,6 +67,8 @@ export type AiAgent = {
     fallbackToHuman: boolean
     connectionId: string | null
     pipelineId: string | null
+    assignmentStrategy: string
+    fixedOwnerId: string | null
     createdAt: string
     updatedAt: string
     // relações
@@ -100,6 +102,8 @@ export type CreateAgentPayload = {
     connectionId?: string | null
     pipelineId?: string | null
     productIds?: string[]
+    assignmentStrategy?: string
+    fixedOwnerId?: string | null
 }
 
 export type UpdateAgentPayload = Partial<CreateAgentPayload>

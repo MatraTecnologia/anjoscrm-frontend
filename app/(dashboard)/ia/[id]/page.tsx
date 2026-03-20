@@ -7,7 +7,8 @@ import {
     ArrowLeft, Bot, Power, Loader2, Save,
     Upload, Trash2, FileText, Check,
     Users, Settings, BookOpen, ShoppingBag, GitBranch, Zap, Plug,
-    Info, MessageSquare, Send, RotateCcw,
+    Info, MessageSquare, Send, RotateCcw, UserCheck,
+    RotateCw, UserCog, ArrowDownUp, HandHelping,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -34,6 +35,7 @@ import {
 import { useConnections } from '@/services/connections'
 import { useListPipelines } from '@/services/pipelines'
 import { useListProducts, type Product } from '@/services/products'
+import { useMembers } from '@/services/enterprises'
 import { cn } from '@/lib/utils'
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
@@ -46,6 +48,7 @@ const TABS = [
     { id: 'pipeline', label: 'Pipeline', icon: GitBranch },
     { id: 'conexao', label: 'Conexão', icon: Plug },
     { id: 'leads', label: 'Leads', icon: Users },
+    { id: 'atendentes', label: 'Atendentes', icon: UserCheck },
     { id: 'testar', label: 'Testar', icon: MessageSquare },
 ] as const
 
@@ -750,6 +753,146 @@ function TabLeads({ agentId, enterpriseId }: { agentId: string; enterpriseId: st
     )
 }
 
+// ─── Tab Atendentes ───────────────────────────────────────────────────────────
+
+const ASSIGNMENT_STRATEGIES = [
+    {
+        value: 'round_robin',
+        label: 'Rotativo',
+        description: 'Distribui leads de forma circular entre os atendentes disponíveis.',
+        icon: RotateCw,
+    },
+    {
+        value: 'least_busy',
+        label: 'Menos ocupado',
+        description: 'Atribui ao atendente com menos leads abertos no momento.',
+        icon: ArrowDownUp,
+    },
+    {
+        value: 'fixed_owner',
+        label: 'Atendente fixo',
+        description: 'Sempre atribui ao mesmo atendente escolhido abaixo.',
+        icon: UserCog,
+    },
+    {
+        value: 'manual',
+        label: 'Manual',
+        description: 'A IA realiza o handoff sem atribuir automaticamente — o operador escolhe.',
+        icon: HandHelping,
+    },
+] as const
+
+function TabAtendentes({ agentId, enterpriseId }: { agentId: string; enterpriseId: string }) {
+    const { data: agent } = useAiAgent(agentId, enterpriseId)
+    const { data: members = [] } = useMembers(enterpriseId)
+    const { mutate: update, isPending } = useUpdateAiAgent()
+
+    const [strategy, setStrategy] = useState(agent?.assignmentStrategy ?? 'round_robin')
+    const [fixedOwnerId, setFixedOwnerId] = useState(agent?.fixedOwnerId ?? '')
+
+    useEffect(() => {
+        if (agent) {
+            setStrategy(agent.assignmentStrategy ?? 'round_robin')
+            setFixedOwnerId(agent.fixedOwnerId ?? '')
+        }
+    }, [agent])
+
+    if (!agent) return null
+
+    function handleSave() {
+        update(
+            {
+                id: agentId,
+                enterpriseId,
+                payload: {
+                    assignmentStrategy: strategy,
+                    fixedOwnerId: strategy === 'fixed_owner' ? (fixedOwnerId || null) : null,
+                },
+            },
+            {
+                onSuccess: () => toast.success('Configuração salva'),
+                onError: () => toast.error('Erro ao salvar'),
+            },
+        )
+    }
+
+    return (
+        <div className="max-w-2xl space-y-6">
+            <div>
+                <h2 className="text-sm font-semibold mb-1">Estratégia de atribuição</h2>
+                <p className="text-xs text-muted-foreground mb-4">
+                    Quando a IA realizar um handoff, como o lead será distribuído entre os atendentes?
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {ASSIGNMENT_STRATEGIES.map(({ value, label, description, icon: Icon }) => (
+                        <button
+                            key={value}
+                            type="button"
+                            onClick={() => setStrategy(value)}
+                            className={cn(
+                                'flex items-start gap-3 rounded-lg border p-4 text-left transition-colors',
+                                strategy === value
+                                    ? 'border-primary bg-primary/5'
+                                    : 'border-border hover:bg-muted/50',
+                            )}
+                        >
+                            <div className={cn(
+                                'flex size-8 shrink-0 items-center justify-center rounded-md',
+                                strategy === value ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground',
+                            )}>
+                                <Icon className="size-4" />
+                            </div>
+                            <div className="min-w-0">
+                                <p className={cn(
+                                    'text-sm font-medium leading-tight',
+                                    strategy === value && 'text-primary',
+                                )}>
+                                    {label}
+                                </p>
+                                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                                    {description}
+                                </p>
+                            </div>
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {strategy === 'fixed_owner' && (
+                <div className="space-y-2">
+                    <Label>Atendente fixo</Label>
+                    <Select value={fixedOwnerId} onValueChange={setFixedOwnerId}>
+                        <SelectTrigger>
+                            <SelectValue placeholder="Selecione um atendente" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {members.map(m => (
+                                <SelectItem key={m.userId} value={m.userId}>
+                                    <span className="flex items-center gap-2">
+                                        <span className="size-5 rounded-full bg-muted flex items-center justify-center text-[10px] font-medium uppercase shrink-0">
+                                            {m.user.name.charAt(0)}
+                                        </span>
+                                        <span>{m.user.name}</span>
+                                        <span className="text-muted-foreground text-xs">· {m.role.name}</span>
+                                    </span>
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    {members.length === 0 && (
+                        <p className="text-xs text-muted-foreground">Nenhum membro encontrado nesta empresa.</p>
+                    )}
+                </div>
+            )}
+
+            <Button onClick={handleSave} disabled={isPending} className="gap-1.5">
+                {isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
+                Salvar
+            </Button>
+        </div>
+    )
+}
+
 // ─── Tab Testar ───────────────────────────────────────────────────────────────
 
 function TabTestar({ agentId, enterpriseId }: { agentId: string; enterpriseId: string }) {
@@ -1013,6 +1156,7 @@ export default function IaDetailPage({ params }: { params: Promise<{ id: string 
                 {activeTab === 'pipeline' && <TabPipeline agentId={id} enterpriseId={enterpriseId} />}
                 {activeTab === 'conexao' && <TabConexao agentId={id} enterpriseId={enterpriseId} />}
                 {activeTab === 'leads' && <TabLeads agentId={id} enterpriseId={enterpriseId} />}
+                {activeTab === 'atendentes' && <TabAtendentes agentId={id} enterpriseId={enterpriseId} />}
                 {activeTab === 'testar' && <TabTestar agentId={id} enterpriseId={enterpriseId} />}
             </div>
         </div>

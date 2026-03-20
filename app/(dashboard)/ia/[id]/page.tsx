@@ -9,6 +9,7 @@ import {
     Users, Settings, BookOpen, ShoppingBag, GitBranch, Zap, Plug,
     Info, MessageSquare, Send, RotateCcw, UserCheck,
     RotateCw, UserCog, ArrowDownUp, HandHelping,
+    CreditCard, QrCode, Landmark, Receipt,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -30,7 +31,7 @@ import { useEnterprise } from '@/hooks/use-enterprise'
 import {
     useAiAgent, useUpdateAiAgent, useToggleAiAgent,
     useUploadDocument, useDeleteDocument, useChatWithAgent,
-    type ChatMessage,
+    type ChatMessage, type PaymentMethods, type PixKeyType,
 } from '@/services/ai-agents'
 import { useConnections } from '@/services/connections'
 import { useListPipelines } from '@/services/pipelines'
@@ -48,6 +49,7 @@ const TABS = [
     { id: 'pipeline', label: 'Pipeline', icon: GitBranch },
     { id: 'conexao', label: 'Conexão', icon: Plug },
     { id: 'leads', label: 'Leads', icon: Users },
+    { id: 'pagamentos', label: 'Pagamentos', icon: CreditCard },
     { id: 'atendentes', label: 'Atendentes', icon: UserCheck },
     { id: 'testar', label: 'Testar', icon: MessageSquare },
 ] as const
@@ -753,6 +755,219 @@ function TabLeads({ agentId, enterpriseId }: { agentId: string; enterpriseId: st
     )
 }
 
+// ─── Tab Pagamentos ───────────────────────────────────────────────────────────
+
+// Funções de máscara puras (sem lib externa)
+function maskPhone(v: string): string {
+    const d = v.replace(/\D/g, '').slice(0, 11)
+    if (d.length <= 10) return d.replace(/(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3').replace(/-$/, '')
+    return d.replace(/(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3').replace(/-$/, '')
+}
+
+function maskCnpj(v: string): string {
+    const d = v.replace(/\D/g, '').slice(0, 14)
+    return d
+        .replace(/(\d{2})(\d)/, '$1.$2')
+        .replace(/(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+        .replace(/\.(\d{3})(\d)/, '.$1/$2')
+        .replace(/(\d{4})(\d)/, '$1-$2')
+}
+
+function applyPixMask(value: string, keyType: PixKeyType): string {
+    if (keyType === 'phone') return maskPhone(value)
+    if (keyType === 'cnpj') return maskCnpj(value)
+    return value // email e chave aleatória: sem máscara
+}
+
+function stripMask(value: string): string {
+    return value.replace(/[\s().\/\-]/g, '')
+}
+
+const PIX_KEY_OPTIONS: { value: PixKeyType; label: string; placeholder: string }[] = [
+    { value: 'phone', label: 'Telefone', placeholder: '(11) 99999-9999' },
+    { value: 'cnpj', label: 'CNPJ', placeholder: '00.000.000/0001-00' },
+    { value: 'email', label: 'E-mail', placeholder: 'exemplo@email.com' },
+    { value: 'random', label: 'Chave aleatória', placeholder: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' },
+]
+
+function TabPagamentos({ agentId, enterpriseId }: { agentId: string; enterpriseId: string }) {
+    const { data: agent } = useAiAgent(agentId, enterpriseId)
+    const { mutate: update, isPending } = useUpdateAiAgent()
+
+    const pm = agent?.paymentMethods
+
+    // PIX
+    const [pixEnabled, setPixEnabled] = useState(pm?.pix?.enabled ?? false)
+    const [pixKeyType, setPixKeyType] = useState<PixKeyType>(pm?.pix?.keyType ?? 'phone')
+    const [pixKey, setPixKey] = useState(pm?.pix?.key ?? '')
+
+    // Transferência
+    const [btEnabled, setBtEnabled] = useState(pm?.bank_transfer?.enabled ?? false)
+    const [btBank, setBtBank] = useState(pm?.bank_transfer?.bank ?? '')
+    const [btAgency, setBtAgency] = useState(pm?.bank_transfer?.agency ?? '')
+    const [btAccount, setBtAccount] = useState(pm?.bank_transfer?.account ?? '')
+    const [btHolder, setBtHolder] = useState(pm?.bank_transfer?.holder ?? '')
+
+    // Boleto
+    const [boletoEnabled, setBoletoEnabled] = useState(pm?.boleto?.enabled ?? false)
+
+    useEffect(() => {
+        if (!agent) return
+        const p = agent.paymentMethods
+        setPixEnabled(p?.pix?.enabled ?? false)
+        setPixKeyType(p?.pix?.keyType ?? 'phone')
+        setPixKey(p?.pix?.key ?? '')
+        setBtEnabled(p?.bank_transfer?.enabled ?? false)
+        setBtBank(p?.bank_transfer?.bank ?? '')
+        setBtAgency(p?.bank_transfer?.agency ?? '')
+        setBtAccount(p?.bank_transfer?.account ?? '')
+        setBtHolder(p?.bank_transfer?.holder ?? '')
+        setBoletoEnabled(p?.boleto?.enabled ?? false)
+    }, [agent])
+
+    if (!agent) return null
+
+    function handlePixKeyChange(raw: string) {
+        const masked = applyPixMask(raw, pixKeyType)
+        setPixKey(masked)
+    }
+
+    function handlePixKeyTypeChange(t: PixKeyType) {
+        setPixKeyType(t)
+        setPixKey('')
+    }
+
+    function handleSave() {
+        const payload: PaymentMethods = {}
+        if (pixEnabled) {
+            payload.pix = { enabled: true, keyType: pixKeyType, key: stripMask(pixKey) }
+        }
+        if (btEnabled) {
+            payload.bank_transfer = { enabled: true, bank: btBank, agency: btAgency, account: btAccount, holder: btHolder }
+        }
+        if (boletoEnabled) {
+            payload.boleto = { enabled: true }
+        }
+        update(
+            { id: agentId, enterpriseId, payload: { paymentMethods: Object.keys(payload).length ? payload : null } },
+            {
+                onSuccess: () => toast.success('Formas de pagamento salvas'),
+                onError: () => toast.error('Erro ao salvar'),
+            },
+        )
+    }
+
+    return (
+        <div className="max-w-2xl space-y-4">
+
+            {/* PIX */}
+            <div className={cn(
+                'rounded-lg border p-4 space-y-4 transition-colors',
+                pixEnabled ? 'border-primary/30 bg-primary/5' : 'border-border',
+            )}>
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <QrCode className="size-4 text-muted-foreground" />
+                        <span className="text-sm font-medium">PIX</span>
+                    </div>
+                    <Switch checked={pixEnabled} onCheckedChange={setPixEnabled} />
+                </div>
+
+                {pixEnabled && (
+                    <div className="space-y-3">
+                        <div className="space-y-1.5">
+                            <Label className="text-xs">Tipo de chave</Label>
+                            <div className="flex flex-wrap gap-2">
+                                {PIX_KEY_OPTIONS.map(opt => (
+                                    <button
+                                        key={opt.value}
+                                        type="button"
+                                        onClick={() => handlePixKeyTypeChange(opt.value)}
+                                        className={cn(
+                                            'px-3 py-1.5 rounded-md text-xs font-medium border transition-colors',
+                                            pixKeyType === opt.value
+                                                ? 'bg-primary text-primary-foreground border-primary'
+                                                : 'bg-background border-border text-muted-foreground hover:bg-muted',
+                                        )}
+                                    >
+                                        {opt.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label className="text-xs">Chave PIX</Label>
+                            <Input
+                                value={pixKey}
+                                onChange={e => handlePixKeyChange(e.target.value)}
+                                placeholder={PIX_KEY_OPTIONS.find(o => o.value === pixKeyType)?.placeholder}
+                                inputMode={pixKeyType === 'phone' || pixKeyType === 'cnpj' ? 'numeric' : 'text'}
+                            />
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Transferência Bancária */}
+            <div className={cn(
+                'rounded-lg border p-4 space-y-4 transition-colors',
+                btEnabled ? 'border-primary/30 bg-primary/5' : 'border-border',
+            )}>
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <Landmark className="size-4 text-muted-foreground" />
+                        <span className="text-sm font-medium">Transferência Bancária</span>
+                    </div>
+                    <Switch checked={btEnabled} onCheckedChange={setBtEnabled} />
+                </div>
+
+                {btEnabled && (
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="col-span-2 space-y-1.5">
+                            <Label className="text-xs">Titular da conta</Label>
+                            <Input value={btHolder} onChange={e => setBtHolder(e.target.value)} placeholder="Nome do titular ou empresa" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label className="text-xs">Banco</Label>
+                            <Input value={btBank} onChange={e => setBtBank(e.target.value)} placeholder="Ex: Nubank, Itaú, 077" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label className="text-xs">Agência</Label>
+                            <Input value={btAgency} onChange={e => setBtAgency(e.target.value)} placeholder="0001" />
+                        </div>
+                        <div className="col-span-2 space-y-1.5">
+                            <Label className="text-xs">Conta</Label>
+                            <Input value={btAccount} onChange={e => setBtAccount(e.target.value)} placeholder="00000-0" />
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Boleto */}
+            <div className={cn(
+                'rounded-lg border p-4 transition-colors',
+                boletoEnabled ? 'border-primary/30 bg-primary/5' : 'border-border',
+            )}>
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <Receipt className="size-4 text-muted-foreground" />
+                        <div>
+                            <span className="text-sm font-medium">Boleto</span>
+                            <p className="text-xs text-muted-foreground">Gerado manualmente pelo atendente após o fechamento</p>
+                        </div>
+                    </div>
+                    <Switch checked={boletoEnabled} onCheckedChange={setBoletoEnabled} />
+                </div>
+            </div>
+
+            <Button onClick={handleSave} disabled={isPending} className="gap-1.5">
+                {isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
+                Salvar
+            </Button>
+        </div>
+    )
+}
+
 // ─── Tab Atendentes ───────────────────────────────────────────────────────────
 
 const ASSIGNMENT_STRATEGIES = [
@@ -1156,6 +1371,7 @@ export default function IaDetailPage({ params }: { params: Promise<{ id: string 
                 {activeTab === 'pipeline' && <TabPipeline agentId={id} enterpriseId={enterpriseId} />}
                 {activeTab === 'conexao' && <TabConexao agentId={id} enterpriseId={enterpriseId} />}
                 {activeTab === 'leads' && <TabLeads agentId={id} enterpriseId={enterpriseId} />}
+                {activeTab === 'pagamentos' && <TabPagamentos agentId={id} enterpriseId={enterpriseId} />}
                 {activeTab === 'atendentes' && <TabAtendentes agentId={id} enterpriseId={enterpriseId} />}
                 {activeTab === 'testar' && <TabTestar agentId={id} enterpriseId={enterpriseId} />}
             </div>

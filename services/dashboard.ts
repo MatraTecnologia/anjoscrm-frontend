@@ -39,6 +39,15 @@ export type DashMessagesData = {
     }
     monthly: { month: string; count: number }[]
     heatmap: Record<string, number>
+    byAssignee: {
+        id: string
+        name: string
+        image: string | null
+        count: number
+        inbound: number
+        outbound: number
+        conversations: number
+    }[]
 }
 
 // ─── API helpers ──────────────────────────────────────────────────────────────

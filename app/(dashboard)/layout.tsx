@@ -19,6 +19,7 @@ import {
     ChevronDown,
     Building2,
     Activity,
+    Bot,
 } from 'lucide-react'
 
 import { useSession } from '@/services/auth'
@@ -29,8 +30,8 @@ const navItems = [
     { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { href: '/pipeline', icon: Filter, label: 'Funil' },
     { href: '/leads', icon: Users, label: 'Leads' },
-
     { href: '/chat', icon: MessageCircle, label: 'Chat' },
+    { href: '/ia', icon: Bot, label: 'Minhas IAs' },
 ]
 
 const bottomItems = [

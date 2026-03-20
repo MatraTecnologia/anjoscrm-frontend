@@ -695,9 +695,45 @@ export default function DashboardPage() {
                             </div>
                             <div className="rounded-xl border bg-card p-5 flex flex-col gap-4">
                                 <p className="font-medium">Atendimentos por atendentes</p>
-                                <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">
-                                    Ainda não possui dados
-                                </div>
+                                {chatLoading ? (
+                                    <div className="flex items-center justify-center py-10">
+                                        <Loader2 className="size-5 animate-spin text-muted-foreground" />
+                                    </div>
+                                ) : (chatData?.byAssignee ?? []).filter(a => a.id !== '__none__').length === 0 ? (
+                                    <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">
+                                        Ainda não possui dados
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col gap-3">
+                                        {(chatData?.byAssignee ?? []).filter(a => a.id !== '__none__').map(a => {
+                                            const maxCount = Math.max(...(chatData?.byAssignee ?? []).map(x => x.count), 1)
+                                            const pct = Math.round((a.count / maxCount) * 100)
+                                            return (
+                                                <div key={a.id} className="flex items-center gap-3 text-sm">
+                                                    <LeadInitials name={a.name} image={a.image} size={7} />
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center justify-between mb-1">
+                                                            <span className="font-medium truncate max-w-32">{a.name}</span>
+                                                            <span className="text-xs text-muted-foreground shrink-0 ml-2">
+                                                                {a.count} msg · {a.conversations} conv.
+                                                            </span>
+                                                        </div>
+                                                        <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                                                            <div
+                                                                className="h-full rounded-full bg-primary transition-all"
+                                                                style={{ width: `${pct}%` }}
+                                                            />
+                                                        </div>
+                                                        <div className="flex gap-3 mt-1 text-[10px] text-muted-foreground">
+                                                            <span>↓ {a.inbound} rec.</span>
+                                                            <span>↑ {a.outbound} env.</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </>

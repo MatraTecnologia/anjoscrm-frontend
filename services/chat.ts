@@ -25,7 +25,13 @@ export type ChatMessage = {
 export type Conversation = {
     connectionId: string
     leadId: string
-    lead: { id: string; name: string; phone: string | null; image: string | null }
+    lead: {
+        id: string
+        name: string
+        phone: string | null
+        image: string | null
+        assignee: { id: string; name: string; image: string | null } | null
+    }
     connection: { id: string; name: string; type: string; status: string }
     lastMessage: {
         content: string
@@ -102,6 +108,47 @@ export function useSendMessage() {
                 (old = []) => old.some(m => m.id === data.id) ? old : [...old, data],
             )
             // Invalidar lista de conversas para atualizar last message
+            queryClient.invalidateQueries({
+                queryKey: keys.chat.messages('all', enterpriseId),
+            })
+        },
+    })
+}
+
+async function sendMediaFn({
+    enterpriseId,
+    connectionId,
+    leadId,
+    file,
+    caption,
+}: {
+    enterpriseId: string
+    connectionId: string
+    leadId: string
+    file: File
+    caption?: string
+}): Promise<ChatMessage> {
+    const formData = new FormData()
+    formData.append('file', file)
+    if (caption?.trim()) formData.append('caption', caption.trim())
+
+    const { data } = await api.post<ChatMessage>(
+        `/chat/${enterpriseId}/${connectionId}/${leadId}/media`,
+        formData,
+        { headers: { 'X-Enterprise-Id': enterpriseId, 'Content-Type': undefined } },
+    )
+    return data
+}
+
+export function useSendMedia() {
+    const queryClient = useQueryClient()
+    return useMutation({
+        mutationFn: sendMediaFn,
+        onSuccess: (data, { enterpriseId, connectionId, leadId }) => {
+            queryClient.setQueryData<ChatMessage[]>(
+                keys.chat.messages(connectionId, leadId),
+                (old = []) => old.some(m => m.id === data.id) ? old : [...old, data],
+            )
             queryClient.invalidateQueries({
                 queryKey: keys.chat.messages('all', enterpriseId),
             })

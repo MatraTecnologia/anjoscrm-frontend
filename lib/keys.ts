@@ -76,4 +76,9 @@ export const keys = {
         messages: (enterpriseId: string, from: string, to: string) =>
             ['dashboard', enterpriseId, 'messages', from, to] as const,
     },
+
+    aiAgents: {
+        all: (enterpriseId: string) => ['enterprises', enterpriseId, 'ai-agents'] as const,
+        detail: (id: string) => ['ai-agents', id] as const,
+    },
 }

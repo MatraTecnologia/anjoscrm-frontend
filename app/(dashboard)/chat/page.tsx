@@ -1,13 +1,15 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import {
     Search, Filter, MessageCircle, Send, Loader2,
     Check, CheckCheck, Wifi, WifiOff,
     Phone, MoreVertical, X, User,
     ImageIcon, VideoIcon, FileIcon, MicIcon,
-    Eye, EyeOff, ArrowUpDown, Clock, SortDesc,
+    Eye, EyeOff, ArrowUpDown, Clock,
     Users, MessageSquare, Inbox,
+    UserPlus, UserMinus, ChevronDown,
+    Paperclip,
 } from 'lucide-react'
 import { formatDistanceToNow, format, isToday, isYesterday, startOfDay, subDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -32,16 +34,23 @@ import {
     ContextMenuContent,
     ContextMenuItem,
     ContextMenuSeparator,
+    ContextMenuSub,
+    ContextMenuSubContent,
+    ContextMenuSubTrigger,
     ContextMenuTrigger,
 } from '@/components/ui/context-menu'
+import {
+    Popover, PopoverContent, PopoverTrigger,
+} from '@/components/ui/popover'
 
 import { useEnterprise } from '@/hooks/use-enterprise'
 import {
-    useConversations, useMessages, useSendMessage, useChatSocket,
+    useConversations, useMessages, useSendMessage, useSendMedia, useChatSocket,
     type Conversation, type ChatMessage,
 } from '@/services/chat'
 import { useConnections } from '@/services/connections'
-import { useLead } from '@/services/leads'
+import { useLead, useUpdateLead } from '@/services/leads'
+import { useMembers } from '@/services/enterprises'
 import { LeadSheet } from '@/components/lead-sheet'
 import { keys } from '@/lib/keys'
 
@@ -95,6 +104,8 @@ function ConversationItem({
     onOpenLead,
     onMarkRead,
     onMarkUnread,
+    onAssign,
+    members,
 }: {
     conv: Conversation
     isActive: boolean
@@ -105,9 +116,12 @@ function ConversationItem({
     onOpenLead: () => void
     onMarkRead: () => void
     onMarkUnread: () => void
+    onAssign: (assigneeId: string | null) => void
+    members: Array<{ user: { id: string; name: string; image: string | null } }>
 }) {
     const isInbound = conv.lastMessage.direction === 'INBOUND'
     const isWhatsApp = conv.connection.type === 'WHATSAPP'
+    const assignee = conv.lead.assignee
 
     return (
         <ContextMenu>
@@ -151,6 +165,21 @@ function ConversationItem({
                         {isWhatsApp && (
                             <div className="absolute -bottom-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full bg-green-500 ring-1 ring-background">
                                 <WhatsAppIcon className="size-2.5 text-white" />
+                            </div>
+                        )}
+                        {/* Assignee badge (canto inferior esquerdo) */}
+                        {assignee && (
+                            <div
+                                className="absolute -bottom-0.5 -left-0.5 size-4 rounded-full ring-1 ring-background overflow-hidden"
+                                title={`Atendente: ${assignee.name}`}
+                            >
+                                {assignee.image ? (
+                                    <img src={assignee.image} alt={assignee.name} className="size-full object-cover" />
+                                ) : (
+                                    <div className={cn('size-full flex items-center justify-center text-white text-[8px] font-bold', getAvatarColor(assignee.name))}>
+                                        {assignee.name[0].toUpperCase()}
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
@@ -204,6 +233,42 @@ function ConversationItem({
                     <User className="size-4 mr-2" />
                     Ver dados do lead
                 </ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuSub>
+                    <ContextMenuSubTrigger>
+                        <UserPlus className="size-4 mr-2" />
+                        Atribuir a...
+                    </ContextMenuSubTrigger>
+                    <ContextMenuSubContent className="w-52">
+                        {members.length === 0 && (
+                            <div className="px-3 py-2 text-xs text-muted-foreground">Sem membros</div>
+                        )}
+                        {members.map(m => (
+                            <ContextMenuItem key={m.user.id} onClick={() => onAssign(m.user.id)}>
+                                <div className="flex items-center gap-2 flex-1">
+                                    {m.user.image ? (
+                                        <img src={m.user.image} className="size-5 rounded-full object-cover" />
+                                    ) : (
+                                        <div className={cn('size-5 rounded-full flex items-center justify-center text-white text-[9px]', getAvatarColor(m.user.name))}>
+                                            {m.user.name[0].toUpperCase()}
+                                        </div>
+                                    )}
+                                    <span className="truncate">{m.user.name}</span>
+                                </div>
+                                {assignee?.id === m.user.id && <Check className="size-3 ml-auto shrink-0" />}
+                            </ContextMenuItem>
+                        ))}
+                        {assignee && (
+                            <>
+                                <ContextMenuSeparator />
+                                <ContextMenuItem onClick={() => onAssign(null)} className="text-destructive focus:text-destructive">
+                                    <UserMinus className="size-4 mr-2" />
+                                    Remover atendente
+                                </ContextMenuItem>
+                            </>
+                        )}
+                    </ContextMenuSubContent>
+                </ContextMenuSub>
                 <ContextMenuSeparator />
                 <ContextMenuItem onClick={onMarkRead}>
                     <Eye className="size-4 mr-2" />
@@ -303,6 +368,49 @@ function MediaContent({ mediaType, mediaUrl, content }: {
     return null
 }
 
+// ─── WhatsApp markdown parser ─────────────────────────────────────────────────
+// Converte *negrito*, _itálico_, ~tachado~, `mono`, ```bloco``` em React elements
+
+function parseWaMarkdown(text: string): React.ReactNode {
+    // Ordem importa: triple backtick antes de single
+    const regex = /```([\s\S]*?)```|`([^`\n]+)`|\*([^*\n]+)\*|_([^_\n]+)_|~([^~\n]+)~/g
+    const segments: React.ReactNode[] = []
+    let lastIndex = 0
+    let key = 0
+    let match: RegExpExecArray | null
+
+    while ((match = regex.exec(text)) !== null) {
+        if (match.index > lastIndex) segments.push(text.slice(lastIndex, match.index))
+
+        if (match[1] !== undefined) {
+            // ```bloco```
+            segments.push(
+                <code key={key++} className="block font-mono text-xs bg-black/15 dark:bg-white/10 rounded px-1.5 py-0.5 whitespace-pre-wrap">
+                    {match[1]}
+                </code>,
+            )
+        } else if (match[2] !== undefined) {
+            // `inline`
+            segments.push(
+                <code key={key++} className="font-mono text-xs bg-black/15 dark:bg-white/10 rounded px-1">
+                    {match[2]}
+                </code>,
+            )
+        } else if (match[3] !== undefined) {
+            segments.push(<strong key={key++}>{match[3]}</strong>)
+        } else if (match[4] !== undefined) {
+            segments.push(<em key={key++}>{match[4]}</em>)
+        } else if (match[5] !== undefined) {
+            segments.push(<del key={key++}>{match[5]}</del>)
+        }
+
+        lastIndex = match.index + match[0].length
+    }
+
+    if (lastIndex < text.length) segments.push(text.slice(lastIndex))
+    return segments.length === 0 ? text : segments
+}
+
 // ─── Message bubble ───────────────────────────────────────────────────────────
 
 function MessageBubble({ msg, isFirst, isLast }: {
@@ -339,7 +447,9 @@ function MessageBubble({ msg, isFirst, isLast }: {
                 )}
 
                 {msg.content && (
-                    <p className="break-words leading-relaxed whitespace-pre-wrap px-1">{msg.content}</p>
+                    <p className="break-words leading-relaxed whitespace-pre-wrap px-1">
+                        {parseWaMarkdown(msg.content)}
+                    </p>
                 )}
 
                 <div className={cn(
@@ -380,18 +490,34 @@ function DateSeparator({ date }: { date: string }) {
 function ChatWindow({
     conv,
     enterpriseId,
+    onAssign,
+    members,
 }: {
     conv: Conversation
     enterpriseId: string
+    onAssign: (assigneeId: string | null) => void
+    members: Array<{ user: { id: string; name: string; image: string | null } }>
 }) {
     const [input, setInput] = useState('')
     const [leadSheetOpen, setLeadSheetOpen] = useState(false)
+    const [assignPopoverOpen, setAssignPopoverOpen] = useState(false)
+    const [memberSearch, setMemberSearch] = useState('')
+    const [mediaFile, setMediaFile] = useState<File | null>(null)
+    const [mediaCaption, setMediaCaption] = useState('')
+    const [mediaPreviewUrl, setMediaPreviewUrl] = useState<string | null>(null)
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const textareaRef = useRef<HTMLTextAreaElement>(null)
+    const fileInputRef = useRef<HTMLInputElement>(null)
 
     const { data: messages = [], isLoading } = useMessages(enterpriseId, conv.connectionId, conv.leadId)
     const { mutate: send, isPending: sending } = useSendMessage()
+    const { mutate: sendMedia, isPending: sendingMedia } = useSendMedia()
     const { data: fullLead } = useLead(enterpriseId, conv.leadId, leadSheetOpen)
+
+    const filteredMembers = memberSearch
+        ? members.filter(m => m.user.name.toLowerCase().includes(memberSearch.toLowerCase()))
+        : members
+    const assignee = conv.lead.assignee
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -418,6 +544,42 @@ function ChatWindow({
             onError: (err: unknown) => {
                 const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
                 toast.error(msg ?? 'Falha ao enviar mensagem.')
+            },
+        })
+    }
+
+    function clearMedia() {
+        setMediaFile(null)
+        setMediaCaption('')
+        if (mediaPreviewUrl) URL.revokeObjectURL(mediaPreviewUrl)
+        setMediaPreviewUrl(null)
+        if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+
+    function handleMediaSelect(e: React.ChangeEvent<HTMLInputElement>) {
+        const file = e.target.files?.[0]
+        if (!file) return
+        setMediaFile(file)
+        if (file.type.startsWith('image/') || file.type.startsWith('video/')) {
+            setMediaPreviewUrl(URL.createObjectURL(file))
+        } else {
+            setMediaPreviewUrl(null)
+        }
+    }
+
+    function handleSendMedia() {
+        if (!mediaFile || sendingMedia) return
+        sendMedia({
+            enterpriseId,
+            connectionId: conv.connectionId,
+            leadId: conv.leadId,
+            file: mediaFile,
+            caption: mediaCaption,
+        }, {
+            onSuccess: () => clearMedia(),
+            onError: (err: unknown) => {
+                const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
+                toast.error(msg ?? 'Falha ao enviar arquivo.')
             },
         })
     }
@@ -486,6 +648,87 @@ function ChatWindow({
                         <Phone className="size-4" />
                     </Button>
                 )}
+
+                {/* Botão atribuir atendente */}
+                <Popover open={assignPopoverOpen} onOpenChange={open => { setAssignPopoverOpen(open); if (!open) setMemberSearch('') }}>
+                    <PopoverTrigger asChild>
+                        <button
+                            className={cn(
+                                'flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs transition-colors border',
+                                assignee
+                                    ? 'border-border bg-muted/50 hover:bg-muted'
+                                    : 'border-dashed border-muted-foreground/40 text-muted-foreground hover:border-muted-foreground hover:text-foreground',
+                            )}
+                            title="Atribuir atendente"
+                        >
+                            {assignee ? (
+                                <>
+                                    {assignee.image ? (
+                                        <img src={assignee.image} className="size-4 rounded-full object-cover" />
+                                    ) : (
+                                        <div className={cn('size-4 rounded-full flex items-center justify-center text-white text-[8px]', getAvatarColor(assignee.name))}>
+                                            {assignee.name[0].toUpperCase()}
+                                        </div>
+                                    )}
+                                    <span className="max-w-[80px] truncate font-medium text-foreground">{assignee.name.split(' ')[0]}</span>
+                                    <ChevronDown className="size-3 text-muted-foreground" />
+                                </>
+                            ) : (
+                                <>
+                                    <UserPlus className="size-3.5" />
+                                    <span>Atribuir</span>
+                                </>
+                            )}
+                        </button>
+                    </PopoverTrigger>
+                    <PopoverContent align="end" className="w-56 p-2">
+                        <p className="text-xs font-semibold text-muted-foreground px-1 mb-2">Atribuir atendente</p>
+                        <Input
+                            placeholder="Buscar..."
+                            value={memberSearch}
+                            onChange={e => setMemberSearch(e.target.value)}
+                            className="h-7 text-xs mb-2"
+                        />
+                        <div className="flex flex-col gap-0.5 max-h-48 overflow-y-auto">
+                            {filteredMembers.length === 0 && (
+                                <p className="text-xs text-muted-foreground px-2 py-1">Nenhum membro encontrado</p>
+                            )}
+                            {filteredMembers.map(m => (
+                                <button
+                                    key={m.user.id}
+                                    className={cn(
+                                        'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-left hover:bg-muted transition-colors w-full',
+                                        assignee?.id === m.user.id && 'bg-primary/5 font-medium',
+                                    )}
+                                    onClick={() => { onAssign(m.user.id); setAssignPopoverOpen(false); setMemberSearch('') }}
+                                >
+                                    {m.user.image ? (
+                                        <img src={m.user.image} className="size-6 rounded-full object-cover shrink-0" />
+                                    ) : (
+                                        <div className={cn('size-6 rounded-full flex items-center justify-center text-white text-[10px] shrink-0', getAvatarColor(m.user.name))}>
+                                            {m.user.name[0].toUpperCase()}
+                                        </div>
+                                    )}
+                                    <span className="truncate flex-1">{m.user.name}</span>
+                                    {assignee?.id === m.user.id && <Check className="size-3 shrink-0 text-primary" />}
+                                </button>
+                            ))}
+                        </div>
+                        {assignee && (
+                            <>
+                                <Separator className="my-2" />
+                                <button
+                                    className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-destructive hover:bg-destructive/10 transition-colors w-full"
+                                    onClick={() => { onAssign(null); setAssignPopoverOpen(false) }}
+                                >
+                                    <UserMinus className="size-4 shrink-0" />
+                                    Remover atendente
+                                </button>
+                            </>
+                        )}
+                    </PopoverContent>
+                </Popover>
+
                 <Button
                     size="icon"
                     variant="ghost"
@@ -538,7 +781,75 @@ function ChatWindow({
                         Conexão desconectada. Reconecte em Configurações → Conexões para enviar mensagens.
                     </div>
                 )}
+
+                {/* Prévia de arquivo selecionado */}
+                {mediaFile && (
+                    <div className="mb-2 rounded-xl border bg-muted/40 p-3 flex gap-3 items-start">
+                        {/* Thumbnail */}
+                        <div className="size-14 rounded-lg overflow-hidden bg-muted shrink-0 flex items-center justify-center">
+                            {mediaPreviewUrl && mediaFile.type.startsWith('image/') ? (
+                                <img src={mediaPreviewUrl} className="size-full object-cover" />
+                            ) : mediaPreviewUrl && mediaFile.type.startsWith('video/') ? (
+                                <video src={mediaPreviewUrl} className="size-full object-cover" muted />
+                            ) : mediaFile.type.startsWith('audio/') ? (
+                                <MicIcon className="size-6 text-muted-foreground" />
+                            ) : (
+                                <FileIcon className="size-6 text-muted-foreground" />
+                            )}
+                        </div>
+                        <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+                            <p className="text-xs font-medium truncate">{mediaFile.name}</p>
+                            <input
+                                className="w-full rounded-lg border bg-background px-3 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                                placeholder="Legenda (opcional)"
+                                value={mediaCaption}
+                                onChange={e => setMediaCaption(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter') handleSendMedia() }}
+                            />
+                        </div>
+                        <div className="flex flex-col gap-1.5 shrink-0">
+                            <Button
+                                size="icon"
+                                variant="ghost"
+                                className="size-8"
+                                onClick={clearMedia}
+                            >
+                                <X className="size-3.5" />
+                            </Button>
+                            <Button
+                                size="icon"
+                                className="size-8"
+                                onClick={handleSendMedia}
+                                disabled={!isConnected || sendingMedia}
+                            >
+                                {sendingMedia
+                                    ? <Loader2 className="size-3.5 animate-spin" />
+                                    : <Send className="size-3.5" />
+                                }
+                            </Button>
+                        </div>
+                    </div>
+                )}
+
+                <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="hidden"
+                    accept="image/*,video/*,audio/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
+                    onChange={handleMediaSelect}
+                />
+
                 <div className="flex items-end gap-2">
+                    <Button
+                        size="icon"
+                        variant="ghost"
+                        className="size-9 shrink-0 text-muted-foreground rounded-xl"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={!isConnected}
+                        title="Enviar arquivo"
+                    >
+                        <Paperclip className="size-4" />
+                    </Button>
                     <textarea
                         ref={textareaRef}
                         value={input}
@@ -872,6 +1183,8 @@ export default function ChatPage() {
 
     const { data: conversations = [], isLoading } = useConversations(enterpriseId, search || undefined)
     const { data: connections = [] } = useConnections(enterpriseId)
+    const { data: members = [] } = useMembers(enterpriseId)
+    const { mutate: updateLead } = useUpdateLead()
 
     useChatSocket(enterpriseId)
 
@@ -947,6 +1260,35 @@ export default function ChatPage() {
                     : c,
             ),
         )
+    }
+
+    function assignConv(conv: Conversation, assigneeId: string | null) {
+        updateLead({
+            id: conv.leadId,
+            enterpriseId,
+            payload: { assigneeId },
+        }, {
+            onSuccess: () => {
+                const member = assigneeId ? members.find(m => m.user.id === assigneeId) : null
+                queryClient.setQueriesData<Conversation[]>(
+                    { queryKey: keys.chat.messages('all', enterpriseId) },
+                    (old = []) => old.map(c =>
+                        c.leadId === conv.leadId
+                            ? { ...c, lead: { ...c.lead, assignee: member?.user ?? null } }
+                            : c,
+                    ),
+                )
+                // Atualizar conversa selecionada se for a mesma
+                if (selectedConv?.leadId === conv.leadId) {
+                    setSelectedConv(prev => prev
+                        ? { ...prev, lead: { ...prev.lead, assignee: member?.user ?? null } }
+                        : prev,
+                    )
+                }
+                toast.success(assigneeId ? 'Atendente atribuído.' : 'Atendente removido.')
+            },
+            onError: () => toast.error('Erro ao atribuir atendente.'),
+        })
     }
 
     function handleMarkSelectedRead() {
@@ -1121,6 +1463,8 @@ export default function ChatPage() {
                                 onOpenLead={() => setCtxLeadConv(conv)}
                                 onMarkRead={() => markRead([conv])}
                                 onMarkUnread={() => markUnread([conv])}
+                                onAssign={(assigneeId) => assignConv(conv, assigneeId)}
+                                members={members}
                             />
                         ))
                     )}
@@ -1130,7 +1474,12 @@ export default function ChatPage() {
             {/* ── Right panel ────────────────────────────────────────────── */}
             <div className="flex-1 min-w-0">
                 {selectedConv
-                    ? <ChatWindow conv={selectedConv} enterpriseId={enterpriseId} />
+                    ? <ChatWindow
+                        conv={selectedConv}
+                        enterpriseId={enterpriseId}
+                        onAssign={(assigneeId) => assignConv(selectedConv, assigneeId)}
+                        members={members}
+                    />
                     : <EmptyState />
                 }
             </div>

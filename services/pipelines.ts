@@ -12,6 +12,8 @@ export type PipelineStage = {
     name: string
     color: string
     order: number
+    description: string | null
+    aiInstructions: string | null
     createdAt: string
     _count?: { deals: number }
 }
@@ -203,15 +205,19 @@ async function createStageFn({
     enterpriseId,
     name,
     color,
+    description,
+    aiInstructions,
 }: {
     pipelineId: string
     enterpriseId: string
     name: string
     color?: string
+    description?: string
+    aiInstructions?: string
 }): Promise<PipelineStage> {
     const { data } = await api.post<PipelineStage>(
         `/pipelines/${pipelineId}/stages`,
-        { name, color },
+        { name, color, description, aiInstructions },
         { headers: { 'X-Enterprise-Id': enterpriseId } },
     )
     return data
@@ -223,16 +229,20 @@ async function updateStageFn({
     name,
     color,
     order,
+    description,
+    aiInstructions,
 }: {
     stageId: string
     enterpriseId: string
     name?: string
     color?: string
     order?: number
+    description?: string | null
+    aiInstructions?: string | null
 }): Promise<PipelineStage> {
     const { data } = await api.patch<PipelineStage>(
         `/pipelines/stages/${stageId}`,
-        { name, color, order },
+        { name, color, order, description, aiInstructions },
         { headers: { 'X-Enterprise-Id': enterpriseId } },
     )
     return data

@@ -288,7 +288,8 @@ export function useUpdateAiAgent() {
     return useMutation({
         mutationFn: updateAgentFn,
         onSuccess: (data) => {
-            queryClient.setQueryData(keys.aiAgents.detail(data.id), data)
+            // Invalida o detalhe (não usa setQueryData pois o PATCH retorna sem relações)
+            queryClient.invalidateQueries({ queryKey: keys.aiAgents.detail(data.id) })
             queryClient.invalidateQueries({ queryKey: keys.aiAgents.all(data.enterpriseId) })
         },
     })
@@ -309,7 +310,8 @@ export function useToggleAiAgent() {
     return useMutation({
         mutationFn: toggleAgentFn,
         onSuccess: (data) => {
-            queryClient.setQueryData(keys.aiAgents.detail(data.id), data)
+            // Invalida o detalhe (não usa setQueryData pois o toggle retorna sem relações)
+            queryClient.invalidateQueries({ queryKey: keys.aiAgents.detail(data.id) })
             queryClient.invalidateQueries({ queryKey: keys.aiAgents.all(data.enterpriseId) })
         },
     })
@@ -351,4 +353,34 @@ export function usePauseLead() {
 
 export function useResumeLead() {
     return useMutation({ mutationFn: resumeLeadFn })
+}
+
+// ─── Chat de teste ────────────────────────────────────────────────────────────
+
+export type ChatMessage = {
+    role: 'user' | 'assistant'
+    content: string
+}
+
+async function chatWithAgentFn({
+    id,
+    enterpriseId,
+    message,
+    history,
+}: {
+    id: string
+    enterpriseId: string
+    message: string
+    history: ChatMessage[]
+}): Promise<{ text: string }> {
+    const { data } = await api.post<{ text: string }>(
+        `/ai-agents/${id}/chat`,
+        { message, history },
+        { headers: { 'X-Enterprise-Id': enterpriseId } },
+    )
+    return data
+}
+
+export function useChatWithAgent() {
+    return useMutation({ mutationFn: chatWithAgentFn })
 }

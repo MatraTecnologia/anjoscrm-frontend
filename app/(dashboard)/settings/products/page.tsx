@@ -3,9 +3,11 @@
 import { useRef, useState, useEffect, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import * as XLSX from 'xlsx'
 import {
     Plus, Search, Pencil, Trash2, Loader2, Star, Upload,
     X, ImageIcon, Video, Package, MoreHorizontal, CheckCircle2, AlertCircle, GripVertical,
+    FileDown, FileSpreadsheet, TableIcon, Globe, Check,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -14,6 +16,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import { Progress } from '@/components/ui/progress'
+import { Switch } from '@/components/ui/switch'
 import {
     Sheet,
     SheetContent,
@@ -39,6 +42,14 @@ import {
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog'
+import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
@@ -55,13 +66,19 @@ import {
     useDeleteMedia,
     useSetCover,
     useProduct,
+    useImportProducts,
+    useScanProductUrl,
     presignMedia,
     registerMedia,
     reorderMedia,
     uploadFileToS3,
     type Product,
     type MediaItem,
+    type ImportProductRow,
+    type ImportResult,
+    type ScannedProduct,
 } from '@/services/products'
+import { useListAiAgents } from '@/services/ai-agents'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -927,6 +944,515 @@ function ProductSheet({
     )
 }
 
+// ─── Import Dialog ────────────────────────────────────────────────────────────
+
+const TEMPLATE_HEADERS = ['nome', 'categoria', 'sku', 'preco', 'parcelas', 'nota_parcelas', 'descricao', 'estoque', 'unidade', 'status']
+const TEMPLATE_EXAMPLE = ['Colchão Queen', 'Colchões', 'COL-001', '1200', '12', '12x de R$ 100', 'Colchão de mola ensacada', '5', 'un', 'active']
+
+function downloadTemplate() {
+    const rows = [TEMPLATE_HEADERS, TEMPLATE_EXAMPLE]
+    const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n')
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'template-produtos.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+}
+
+function parseSheetRow(row: Record<string, unknown>): ImportProductRow | null {
+    const get = (...keys: string[]) => {
+        for (const k of keys) {
+            const val = row[k] ?? row[k.toUpperCase()] ?? row[k.toLowerCase()]
+            if (val !== undefined && val !== null && String(val).trim() !== '') return String(val).trim()
+        }
+        return ''
+    }
+    const name = get('nome', 'name', 'modelo', 'MODELO', 'produto', 'PRODUTO')
+    if (!name) return null
+
+    const toNum = (v: string) => { const n = parseFloat(v.replace(',', '.')); return isNaN(n) ? null : n }
+    const toInt = (v: string) => { const n = parseInt(v); return isNaN(n) ? null : n }
+
+    const tagsStr = get('tamanho', 'TAMANHO', 'tags', 'TAGS')
+
+    return {
+        name,
+        category: get('categoria', 'category', 'linha', 'LINHA') || null,
+        sku: get('sku', 'SKU', 'codigo', 'CODIGO') || null,
+        price: toNum(get('preco', 'preço', 'price', 'PRECO', 'valor', 'VALOR')) ?? 0,
+        maxInstallments: toInt(get('parcelas', 'PARCELAS', 'max_installments')),
+        installmentsNote: get('nota_parcelas', 'NOTA_PARCELAS', 'nota parcelas') || null,
+        description: get('descricao', 'descrição', 'description', 'DESCRICAO') || null,
+        stock: toNum(get('estoque', 'stock', 'ESTOQUE')),
+        unit: get('unidade', 'unit', 'UNIDADE') || null,
+        status: ['active', 'inactive'].includes(get('status', 'STATUS').toLowerCase())
+            ? get('status', 'STATUS').toLowerCase()
+            : 'active',
+        tags: tagsStr ? tagsStr.split(/[,;]/).map(t => t.trim()).filter(Boolean) : [],
+    }
+}
+
+// ─── ScanUrlDialog ────────────────────────────────────────────────────────────
+
+function ScanUrlDialog({
+    open,
+    onClose,
+    enterpriseId,
+}: {
+    open: boolean
+    onClose: () => void
+    enterpriseId: string
+}) {
+    const [url, setUrl] = useState('')
+    const [agentId, setAgentId] = useState('')
+    const [extractImages, setExtractImages] = useState(true)
+    const [scanned, setScanned] = useState<ScannedProduct[]>([])
+    const [selected, setSelected] = useState<Set<number>>(new Set())
+    const [step, setStep] = useState<'input' | 'preview'>('input')
+
+    const { data: agents = [] } = useListAiAgents(enterpriseId)
+    const activeAgents = agents.filter(a => a.hasApiKey)
+
+    const { mutate: scanUrl, isPending: isScanning } = useScanProductUrl()
+    const { mutate: importProducts, isPending: isImporting } = useImportProducts()
+
+    function handleClose() {
+        setUrl('')
+        setAgentId('')
+        setExtractImages(true)
+        setScanned([])
+        setSelected(new Set())
+        setStep('input')
+        onClose()
+    }
+
+    function handleScan() {
+        if (!url || !agentId) return
+        scanUrl(
+            { enterpriseId, url, agentId },
+            {
+                onSuccess: (result) => {
+                    setScanned(result.products)
+                    setSelected(new Set(result.products.map((_, i) => i)))
+                    setStep('preview')
+                },
+                onError: (err: Error) => toast.error(err.message),
+            },
+        )
+    }
+
+    function toggleAll() {
+        if (selected.size === scanned.length) {
+            setSelected(new Set())
+        } else {
+            setSelected(new Set(scanned.map((_, i) => i)))
+        }
+    }
+
+    function toggleOne(i: number) {
+        setSelected(prev => {
+            const next = new Set(prev)
+            next.has(i) ? next.delete(i) : next.add(i)
+            return next
+        })
+    }
+
+    function handleImport() {
+        const toImport = scanned
+            .filter((_, i) => selected.has(i))
+            .map(p => ({
+                name: p.name,
+                description: p.description ?? null,
+                price: p.price ?? 0,
+                sku: p.sku ?? null,
+                category: p.category ?? null,
+                imageUrl: extractImages ? (p.imageUrl ?? null) : null,
+            }))
+        if (!toImport.length) return
+        importProducts(
+            { enterpriseId, products: toImport },
+            {
+                onSuccess: (result) => {
+                    toast.success(`${result.created} produto(s) importado(s) com sucesso!`)
+                    handleClose()
+                },
+                onError: (err: Error) => toast.error(err.message),
+            },
+        )
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={v => { if (!v) handleClose() }}>
+            <DialogContent className="max-w-lg">
+                <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                        <Globe className="size-4" />
+                        Escanear URL
+                    </DialogTitle>
+                    <DialogDescription>
+                        Cole a URL de uma página de produtos. A IA vai extrair os itens automaticamente.
+                    </DialogDescription>
+                </DialogHeader>
+
+                {step === 'input' && (
+                    <div className="flex flex-col gap-4 py-2">
+                        <div className="flex flex-col gap-1.5">
+                            <Label>URL da página</Label>
+                            <Input
+                                placeholder="https://seusite.com/produtos"
+                                value={url}
+                                onChange={e => setUrl(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter') handleScan() }}
+                            />
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                            <Label>Agente de IA</Label>
+                            {activeAgents.length === 0 ? (
+                                <p className="text-sm text-muted-foreground">
+                                    Nenhum agente com API Key configurada. Vá em <strong>Minhas IAs</strong> e configure uma.
+                                </p>
+                            ) : (
+                                <Select value={agentId} onValueChange={setAgentId}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Selecione um agente..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {activeAgents.map(a => (
+                                            <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            )}
+                            <p className="text-xs text-muted-foreground">
+                                A API Key do agente será usada para processar a página.
+                            </p>
+                        </div>
+
+                        {/* Opção de imagens */}
+                        <div className="flex items-center justify-between rounded-md border px-3 py-2.5">
+                            <div className="flex flex-col gap-0.5">
+                                <p className="text-sm font-medium">Extrair imagens dos produtos</p>
+                                <p className="text-xs text-muted-foreground">
+                                    A IA associará fotos a cada produto. Na importação, elas são enviadas ao S3.
+                                </p>
+                            </div>
+                            <Switch
+                                checked={extractImages}
+                                onCheckedChange={setExtractImages}
+                            />
+                        </div>
+                    </div>
+                )}
+
+                {step === 'preview' && (
+                    <div className="flex flex-col gap-3 py-2">
+                        <div className="flex items-center justify-between">
+                            <p className="text-sm text-muted-foreground">
+                                {scanned.length} produto(s) encontrado(s)
+                            </p>
+                            <Button variant="ghost" size="sm" onClick={toggleAll} className="text-xs h-7">
+                                {selected.size === scanned.length ? 'Desmarcar todos' : 'Selecionar todos'}
+                            </Button>
+                        </div>
+                        <div className="flex flex-col gap-1.5 max-h-72 overflow-y-auto pr-1">
+                            {scanned.map((p, i) => (
+                                <button
+                                    key={i}
+                                    type="button"
+                                    onClick={() => toggleOne(i)}
+                                    className={`flex items-start gap-3 rounded-md border px-3 py-2.5 text-left transition-colors ${
+                                        selected.has(i)
+                                            ? 'border-primary bg-primary/5'
+                                            : 'border-border bg-card hover:bg-muted/40'
+                                    }`}
+                                >
+                                    <div className={`mt-0.5 flex size-4 shrink-0 items-center justify-center rounded border transition-colors ${
+                                        selected.has(i) ? 'bg-primary border-primary' : 'border-muted-foreground/40'
+                                    }`}>
+                                        {selected.has(i) && <Check className="size-2.5 text-primary-foreground" />}
+                                    </div>
+                                    {/* Thumbnail */}
+                                    {extractImages && (
+                                        <div className="size-10 shrink-0 rounded border bg-muted overflow-hidden flex items-center justify-center">
+                                            {p.imageUrl
+                                                ? <img src={p.imageUrl} alt={p.name} className="size-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                                                : <Package className="size-4 text-muted-foreground/50" />
+                                            }
+                                        </div>
+                                    )}
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-sm font-medium leading-tight truncate">{p.name}</p>
+                                        {p.description && (
+                                            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{p.description}</p>
+                                        )}
+                                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                            {p.price != null && p.price > 0 && (
+                                                <span className="text-xs font-medium text-foreground">
+                                                    {p.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                </span>
+                                            )}
+                                            {p.category && (
+                                                <Badge variant="secondary" className="text-[10px] py-0 px-1.5">{p.category}</Badge>
+                                            )}
+                                            {p.sku && (
+                                                <span className="text-[10px] text-muted-foreground">SKU: {p.sku}</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs self-start -mt-1"
+                            onClick={() => setStep('input')}
+                        >
+                            ← Voltar e editar URL
+                        </Button>
+                    </div>
+                )}
+
+                <DialogFooter>
+                    <Button variant="outline" onClick={handleClose}>Cancelar</Button>
+                    {step === 'input' ? (
+                        <Button
+                            onClick={handleScan}
+                            disabled={!url || !agentId || isScanning}
+                        >
+                            {isScanning ? <Loader2 className="size-4 animate-spin" /> : <Globe className="size-4" />}
+                            {isScanning ? 'Escaneando...' : 'Escanear'}
+                        </Button>
+                    ) : (
+                        <Button
+                            onClick={handleImport}
+                            disabled={selected.size === 0 || isImporting}
+                        >
+                            {isImporting ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+                            Importar {selected.size > 0 ? `${selected.size} produto(s)` : ''}
+                        </Button>
+                    )}
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
+function ImportDialog({
+    open,
+    onClose,
+    enterpriseId,
+}: {
+    open: boolean
+    onClose: () => void
+    enterpriseId: string
+}) {
+    const fileInputRef = useRef<HTMLInputElement>(null)
+    const [rows, setRows] = useState<ImportProductRow[]>([])
+    const [parseErrors, setParseErrors] = useState<string[]>([])
+    const [filename, setFilename] = useState('')
+    const [result, setResult] = useState<ImportResult | null>(null)
+
+    const { mutate: importProducts, isPending } = useImportProducts()
+
+    function reset() {
+        setRows([])
+        setParseErrors([])
+        setFilename('')
+        setResult(null)
+        if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+
+    function handleClose() { reset(); onClose() }
+
+    function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+        const file = e.target.files?.[0]
+        if (!file) return
+        setFilename(file.name)
+        setResult(null)
+
+        const reader = new FileReader()
+        reader.onload = (ev) => {
+            try {
+                const data = new Uint8Array(ev.target!.result as ArrayBuffer)
+                const wb = XLSX.read(data, { type: 'array' })
+                const ws = wb.Sheets[wb.SheetNames[0]]
+                const json = XLSX.utils.sheet_to_json(ws, { defval: '' }) as Record<string, unknown>[]
+
+                const parsed: ImportProductRow[] = []
+                const errs: string[] = []
+
+                json.forEach((row, i) => {
+                    const p = parseSheetRow(row)
+                    if (p) {
+                        parsed.push(p)
+                    } else {
+                        errs.push(`Linha ${i + 2}: campo "nome" ausente ou vazio`)
+                    }
+                })
+
+                setRows(parsed)
+                setParseErrors(errs)
+            } catch {
+                toast.error('Erro ao ler o arquivo. Verifique se é um .xlsx ou .csv válido.')
+            }
+        }
+        reader.readAsArrayBuffer(file)
+    }
+
+    function handleImport() {
+        importProducts({ enterpriseId, products: rows }, {
+            onSuccess: (res) => {
+                setResult(res)
+                setRows([])
+            },
+            onError: (err: Error) => toast.error(err.message),
+        })
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={v => { if (!v) handleClose() }}>
+            <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
+                <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                        <FileSpreadsheet className="size-5 text-primary" />
+                        Importar produtos via planilha
+                    </DialogTitle>
+                    <DialogDescription>
+                        Faça upload de um arquivo <strong>.xlsx</strong> ou <strong>.csv</strong>. Baixe o template para ver o formato esperado.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div className="flex flex-col gap-4 flex-1 overflow-hidden">
+                    {/* Template + Upload */}
+                    <div className="flex items-center gap-3">
+                        <Button variant="outline" size="sm" onClick={downloadTemplate} className="gap-2">
+                            <FileDown className="size-4" />
+                            Baixar template
+                        </Button>
+
+                        <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="gap-2">
+                            <Upload className="size-4" />
+                            {filename ? filename : 'Selecionar arquivo'}
+                        </Button>
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept=".xlsx,.xls,.csv"
+                            className="hidden"
+                            onChange={handleFile}
+                        />
+                        {rows.length > 0 && (
+                            <Button variant="ghost" size="sm" onClick={reset} className="text-muted-foreground">
+                                <X className="size-4" />
+                            </Button>
+                        )}
+                    </div>
+
+                    {/* Parse errors */}
+                    {parseErrors.length > 0 && (
+                        <div className="rounded-md bg-destructive/10 border border-destructive/30 p-3 text-sm text-destructive space-y-1">
+                            <p className="font-medium flex items-center gap-1.5"><AlertCircle className="size-4" /> Linhas ignoradas:</p>
+                            {parseErrors.map((e, i) => <p key={i} className="pl-5 text-xs">{e}</p>)}
+                        </div>
+                    )}
+
+                    {/* Result */}
+                    {result && (
+                        <div className="rounded-md bg-emerald-50 border border-emerald-200 p-3 text-sm space-y-1">
+                            <p className="font-medium text-emerald-700 flex items-center gap-1.5">
+                                <CheckCircle2 className="size-4" /> {result.created} produto{result.created !== 1 ? 's' : ''} importado{result.created !== 1 ? 's' : ''} com sucesso
+                            </p>
+                            {result.errors.length > 0 && (
+                                <div className="text-destructive mt-1 space-y-0.5">
+                                    {result.errors.map((e, i) => (
+                                        <p key={i} className="text-xs pl-5">Linha {e.row} ({e.name}): erro ao criar</p>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Preview table */}
+                    {rows.length > 0 && (
+                        <div className="flex flex-col gap-2 flex-1 overflow-hidden">
+                            <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+                                <TableIcon className="size-4" />
+                                {rows.length} produto{rows.length !== 1 ? 's' : ''} encontrado{rows.length !== 1 ? 's' : ''} — pré-visualização:
+                            </p>
+                            <div className="overflow-auto flex-1 rounded-md border text-sm">
+                                <table className="w-full min-w-[640px]">
+                                    <thead className="bg-muted/60 sticky top-0">
+                                        <tr>
+                                            <th className="px-3 py-2 text-left font-medium text-muted-foreground text-xs">Nome</th>
+                                            <th className="px-3 py-2 text-left font-medium text-muted-foreground text-xs">Categoria</th>
+                                            <th className="px-3 py-2 text-left font-medium text-muted-foreground text-xs">SKU</th>
+                                            <th className="px-3 py-2 text-right font-medium text-muted-foreground text-xs">Preço</th>
+                                            <th className="px-3 py-2 text-right font-medium text-muted-foreground text-xs">Parcelas</th>
+                                            <th className="px-3 py-2 text-left font-medium text-muted-foreground text-xs">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y">
+                                        {rows.slice(0, 50).map((row, i) => (
+                                            <tr key={i} className="hover:bg-muted/30">
+                                                <td className="px-3 py-2 font-medium max-w-[200px] truncate">{row.name}</td>
+                                                <td className="px-3 py-2 text-muted-foreground truncate">{row.category ?? '—'}</td>
+                                                <td className="px-3 py-2 text-muted-foreground">{row.sku ?? '—'}</td>
+                                                <td className="px-3 py-2 text-right">{row.price ? formatPrice(row.price) : '—'}</td>
+                                                <td className="px-3 py-2 text-right">{row.maxInstallments ? `${row.maxInstallments}x` : '—'}</td>
+                                                <td className="px-3 py-2">
+                                                    <Badge variant={row.status !== 'inactive' ? 'default' : 'secondary'} className="text-xs">
+                                                        {row.status !== 'inactive' ? 'Ativo' : 'Inativo'}
+                                                    </Badge>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                                {rows.length > 50 && (
+                                    <p className="text-xs text-center text-muted-foreground py-2">
+                                        + {rows.length - 50} linha{rows.length - 50 !== 1 ? 's' : ''} não exibida{rows.length - 50 !== 1 ? 's' : ''}
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Empty state */}
+                    {rows.length === 0 && !result && (
+                        <div
+                            className="flex flex-col items-center justify-center border-2 border-dashed rounded-lg py-12 gap-3 text-muted-foreground cursor-pointer hover:border-primary/40 hover:bg-muted/20 transition-colors"
+                            onClick={() => fileInputRef.current?.click()}
+                        >
+                            <FileSpreadsheet className="size-10 opacity-30" />
+                            <div className="text-center">
+                                <p className="text-sm font-medium">Clique para selecionar um arquivo</p>
+                                <p className="text-xs mt-0.5">Aceita .xlsx, .xls ou .csv</p>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                <DialogFooter>
+                    <Button variant="outline" onClick={handleClose} disabled={isPending}>
+                        {result ? 'Fechar' : 'Cancelar'}
+                    </Button>
+                    {rows.length > 0 && (
+                        <Button onClick={handleImport} disabled={isPending}>
+                            {isPending
+                                ? <><Loader2 className="size-4 animate-spin" /> Importando...</>
+                                : `Importar ${rows.length} produto${rows.length !== 1 ? 's' : ''}`
+                            }
+                        </Button>
+                    )}
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ProductsPage() {
@@ -937,6 +1463,8 @@ export default function ProductsPage() {
     const [editId, setEditId] = useState<string | null>(null)
     const [editProduct, setEditProduct] = useState<Product | null>(null)
     const [deleteTarget, setDeleteTarget] = useState<Product | null>(null)
+    const [importOpen, setImportOpen] = useState(false)
+    const [scanOpen, setScanOpen] = useState(false)
 
     const { data: products = [], isLoading } = useListProducts(enterprise?.id ?? '', {
         q: debouncedQ || undefined,
@@ -979,10 +1507,20 @@ export default function ProductsPage() {
                     <h1 className="text-xl font-semibold">Produtos</h1>
                     <p className="text-sm text-muted-foreground mt-0.5">Gerencie seu catálogo de produtos</p>
                 </div>
-                <Button onClick={openCreate}>
-                    <Plus className="size-4" />
-                    Criar
-                </Button>
+                <div className="flex items-center gap-2">
+                    <Button variant="outline" onClick={() => setScanOpen(true)}>
+                        <Globe className="size-4" />
+                        Escanear URL
+                    </Button>
+                    <Button variant="outline" onClick={() => setImportOpen(true)}>
+                        <FileSpreadsheet className="size-4" />
+                        Importar planilha
+                    </Button>
+                    <Button onClick={openCreate}>
+                        <Plus className="size-4" />
+                        Criar
+                    </Button>
+                </div>
             </div>
 
             {/* Search */}
@@ -1101,6 +1639,20 @@ export default function ProductsPage() {
                     })
                 )}
             </div>
+
+            {/* Scan URL dialog */}
+            <ScanUrlDialog
+                open={scanOpen}
+                onClose={() => setScanOpen(false)}
+                enterpriseId={enterprise.id}
+            />
+
+            {/* Import dialog */}
+            <ImportDialog
+                open={importOpen}
+                onClose={() => setImportOpen(false)}
+                enterpriseId={enterprise.id}
+            />
 
             {/* Sheet de criação/edição */}
             <ProductSheet

@@ -16,14 +16,14 @@ import {
     Globe,
     ChevronsLeft,
     ChevronsRight,
-    ChevronDown,
-    Building2,
     Activity,
     Bot,
+    Zap,
 } from 'lucide-react'
 
 import { useSession } from '@/services/auth'
-import { useVerify } from '@/services/enterprises'
+import { useEnterprise } from '@/hooks/use-enterprise'
+import { EnterpriseSwitcher } from '@/components/enterprise-switcher'
 import { cn } from '@/lib/utils'
 
 const navItems = [
@@ -32,6 +32,7 @@ const navItems = [
     { href: '/leads', icon: Users, label: 'Leads' },
     { href: '/chat', icon: MessageCircle, label: 'Chat' },
     { href: '/ia', icon: Bot, label: 'Minhas IAs' },
+    { href: '/automacoes', icon: Zap, label: 'Automações' },
 ]
 
 const bottomItems = [
@@ -45,7 +46,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const pathname = usePathname()
     const router = useRouter()
     const { data: session, isLoading: sessionLoading } = useSession()
-    const { data: verify } = useVerify()
+    const { enterprise, enterprises } = useEnterprise()
 
     useEffect(() => {
         if (!sessionLoading && !session) {
@@ -62,10 +63,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         ? session.user.name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
         : 'U'
 
-    const enterprise = verify?.enterprises?.[0]
-    const workspaceName = enterprise?.name ?? 'Minha empresa'
-    const workspaceInitial = workspaceName[0]?.toUpperCase() ?? 'M'
-
     return (
         <div className="flex  overflow-hidden bg-background min-h-screen max-h-screen">
             {/* Sidebar */}
@@ -80,25 +77,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     'flex items-center border-b h-12 shrink-0 px-2 gap-2',
                     expanded ? 'justify-between' : 'justify-center',
                 )}>
-                    <button className={cn(
-                        'flex items-center gap-2 min-w-0 rounded p-1 hover:bg-muted transition-colors',
-                        expanded ? 'flex-1' : '',
-                    )}>
-                        {enterprise?.logo
-                            ? <img src={enterprise.logo} alt={workspaceName} className="size-6 rounded object-cover shrink-0" />
-                            : (
-                                <div className="flex size-6 shrink-0 items-center justify-center rounded bg-primary text-primary-foreground text-xs font-bold">
-                                    {workspaceInitial}
-                                </div>
-                            )
-                        }
-                        {expanded && (
-                            <>
-                                <span className="text-sm font-medium truncate flex-1 text-left">{workspaceName}</span>
-                                <ChevronDown className="size-3.5 text-muted-foreground shrink-0" />
-                            </>
-                        )}
-                    </button>
+                    <EnterpriseSwitcher
+                        enterprises={enterprises}
+                        activeId={enterprise?.id ?? ''}
+                        expanded={expanded}
+                    />
 
                     {expanded && (
                         <button

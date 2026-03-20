@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, use } from 'react'
+import { useState, use, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import {
     ArrowLeft, Bot, Power, Loader2, Save,
     Upload, Trash2, FileText, Check,
     Users, Settings, BookOpen, ShoppingBag, GitBranch, Zap, Plug,
-    Info,
+    Info, MessageSquare, Send, RotateCcw,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -28,7 +28,8 @@ import {
 import { useEnterprise } from '@/hooks/use-enterprise'
 import {
     useAiAgent, useUpdateAiAgent, useToggleAiAgent,
-    useUploadDocument, useDeleteDocument,
+    useUploadDocument, useDeleteDocument, useChatWithAgent,
+    type ChatMessage,
 } from '@/services/ai-agents'
 import { useConnections } from '@/services/connections'
 import { useListPipelines } from '@/services/pipelines'
@@ -45,6 +46,7 @@ const TABS = [
     { id: 'pipeline', label: 'Pipeline', icon: GitBranch },
     { id: 'conexao', label: 'Conexão', icon: Plug },
     { id: 'leads', label: 'Leads', icon: Users },
+    { id: 'testar', label: 'Testar', icon: MessageSquare },
 ] as const
 
 type TabId = typeof TABS[number]['id']
@@ -417,9 +419,9 @@ function TabConhecimento({ agentId, enterpriseId }: { agentId: string; enterpris
             </div>
 
             {/* Document list */}
-            {agent.documents.length > 0 ? (
+            {(agent.documents?.length ?? 0) > 0 ? (
                 <div className="flex flex-col gap-2">
-                    {agent.documents.map(doc => (
+                    {agent.documents?.map(doc => (
                         <div key={doc.id} className="flex items-center gap-3 rounded-lg border p-3">
                             <FileText className="size-4 text-muted-foreground shrink-0" />
                             <div className="flex-1 min-w-0">
@@ -485,7 +487,7 @@ function TabProdutos({ agentId, enterpriseId }: { agentId: string; enterpriseId:
     const { data: products = [] } = useListProducts(enterpriseId)
     const { mutate: update, isPending } = useUpdateAiAgent()
 
-    const currentIds = agent?.products.map(p => p.product.id) ?? []
+    const currentIds = agent?.products?.map(p => p.product.id) ?? []
     const [selected, setSelected] = useState<string[]>(currentIds)
 
     if (!agent) return null
@@ -730,7 +732,7 @@ function TabLeads({ agentId, enterpriseId }: { agentId: string; enterpriseId: st
 
     if (!agent) return null
 
-    const count = agent._count.leadStates
+    const count = agent._count?.leadStates ?? 0
 
     return (
         <div className="flex flex-col gap-4 max-w-lg">
@@ -744,6 +746,151 @@ function TabLeads({ agentId, enterpriseId }: { agentId: string; enterpriseId: st
                 Gerencie leads individuais diretamente pela tela de <strong>Leads</strong> ou no <strong>Chat</strong>.
                 Você pode pausar ou retomar a IA por conversa no painel de chat.
             </p>
+        </div>
+    )
+}
+
+// ─── Tab Testar ───────────────────────────────────────────────────────────────
+
+function TabTestar({ agentId, enterpriseId }: { agentId: string; enterpriseId: string }) {
+    const { data: agent } = useAiAgent(agentId, enterpriseId)
+    const { mutate: sendMessage, isPending: sending } = useChatWithAgent()
+
+    const [history, setHistory] = useState<ChatMessage[]>([])
+    const [input, setInput] = useState('')
+    const bottomRef = useRef<HTMLDivElement>(null)
+
+    useEffect(() => {
+        bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }, [history, sending])
+
+    if (!agent) return null
+
+    function handleSend(e?: React.FormEvent) {
+        e?.preventDefault()
+        const text = input.trim()
+        if (!text || sending) return
+
+        const newHistory: ChatMessage[] = [...history, { role: 'user', content: text }]
+        setHistory(newHistory)
+        setInput('')
+
+        sendMessage(
+            { id: agentId, enterpriseId, message: text, history },
+            {
+                onSuccess: ({ text: reply }) => {
+                    setHistory(prev => [...prev, { role: 'assistant', content: reply }])
+                },
+                onError: (err: Error) => {
+                    setHistory(prev => [...prev, {
+                        role: 'assistant',
+                        content: `❌ Erro: ${err.message}`,
+                    }])
+                },
+            },
+        )
+    }
+
+    function handleReset() {
+        setHistory([])
+        setInput('')
+    }
+
+    return (
+        <div className="flex flex-col max-w-2xl" style={{ minHeight: 'calc(100vh - 200px)' }}>
+
+            {/* Info banner */}
+            <div className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-900 p-3 mb-4 shrink-0">
+                <Info className="size-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+                <p className="text-xs text-blue-700 dark:text-blue-400 leading-relaxed">
+                    Chat de teste — use para calibrar as respostas do agente.
+                    As conversas aqui <strong>não são salvas</strong> e não afetam leads reais.
+                    {!agent.hasApiKey && <span className="text-amber-600 dark:text-amber-400"> API Key não configurada — configure na aba Geral.</span>}
+                </p>
+            </div>
+
+            {/* Histórico de mensagens */}
+            <div className="flex-1 overflow-auto rounded-lg border bg-muted/20 p-4 flex flex-col gap-3" style={{ minHeight: 320 }}>
+                {history.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full gap-2 text-muted-foreground">
+                        <Bot className="size-8 opacity-40" />
+                        <p className="text-sm">Envie uma mensagem para começar a conversa</p>
+                        <p className="text-xs opacity-70">Ex: &quot;Olá, quero saber mais sobre os seus produtos&quot;</p>
+                    </div>
+                ) : (
+                    history.map((msg, i) => (
+                        <div
+                            key={i}
+                            className={cn(
+                                'flex max-w-[85%] flex-col gap-0.5',
+                                msg.role === 'user' ? 'self-end items-end' : 'self-start items-start',
+                            )}
+                        >
+                            <span className="text-[10px] text-muted-foreground px-1">
+                                {msg.role === 'user' ? 'Você' : agent.name}
+                            </span>
+                            <div className={cn(
+                                'rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap',
+                                msg.role === 'user'
+                                    ? 'bg-primary text-primary-foreground rounded-br-sm'
+                                    : 'bg-background border rounded-bl-sm',
+                            )}>
+                                {msg.content}
+                            </div>
+                        </div>
+                    ))
+                )}
+                {sending && (
+                    <div className="flex items-center gap-2 self-start">
+                        <div className="flex items-center gap-1 rounded-2xl rounded-bl-sm bg-background border px-4 py-3">
+                            <span className="size-1.5 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: '0ms' }} />
+                            <span className="size-1.5 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: '150ms' }} />
+                            <span className="size-1.5 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: '300ms' }} />
+                        </div>
+                    </div>
+                )}
+                <div ref={bottomRef} />
+            </div>
+
+            {/* Input */}
+            <form onSubmit={handleSend} className="flex gap-2 mt-3 shrink-0">
+                <input
+                    className="flex-1 rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring placeholder:text-muted-foreground disabled:opacity-50"
+                    placeholder={agent.hasApiKey ? 'Digite uma mensagem...' : 'Configure a API Key para testar'}
+                    value={input}
+                    onChange={e => setInput(e.target.value)}
+                    disabled={sending || !agent.hasApiKey}
+                    onKeyDown={e => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault()
+                            handleSend()
+                        }
+                    }}
+                    autoFocus
+                />
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleReset}
+                    disabled={history.length === 0}
+                    title="Limpar conversa"
+                    className="shrink-0"
+                >
+                    <RotateCcw className="size-4" />
+                </Button>
+                <Button
+                    type="submit"
+                    size="icon"
+                    disabled={sending || !input.trim() || !agent.hasApiKey}
+                    className="shrink-0"
+                >
+                    {sending
+                        ? <Loader2 className="size-4 animate-spin" />
+                        : <Send className="size-4" />
+                    }
+                </Button>
+            </form>
         </div>
     )
 }
@@ -866,6 +1013,7 @@ export default function IaDetailPage({ params }: { params: Promise<{ id: string 
                 {activeTab === 'pipeline' && <TabPipeline agentId={id} enterpriseId={enterpriseId} />}
                 {activeTab === 'conexao' && <TabConexao agentId={id} enterpriseId={enterpriseId} />}
                 {activeTab === 'leads' && <TabLeads agentId={id} enterpriseId={enterpriseId} />}
+                {activeTab === 'testar' && <TabTestar agentId={id} enterpriseId={enterpriseId} />}
             </div>
         </div>
     )

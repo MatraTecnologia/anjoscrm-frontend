@@ -270,6 +270,44 @@ export function uploadFileToS3(
     })
 }
 
+// ─── Import em massa ──────────────────────────────────────────────────────────
+
+export type ImportProductRow = Omit<CreateProductPayload, 'tags' | 'colors'> & {
+    tags?: string[]
+    colors?: string[]
+    imageUrl?: string | null
+}
+
+export type ImportResult = {
+    created: number
+    errors: { row: number; name: string; error: string }[]
+}
+
+async function importProductsFn({
+    enterpriseId,
+    products,
+}: {
+    enterpriseId: string
+    products: ImportProductRow[]
+}): Promise<ImportResult> {
+    const { data } = await api.post<ImportResult>(
+        `/products/${enterpriseId}/import`,
+        { products },
+        { headers: { 'X-Enterprise-Id': enterpriseId } },
+    )
+    return data
+}
+
+export function useImportProducts() {
+    const queryClient = useQueryClient()
+    return useMutation({
+        mutationFn: importProductsFn,
+        onSuccess: (_, { enterpriseId }) => {
+            queryClient.invalidateQueries({ queryKey: keys.products.all(enterpriseId) })
+        },
+    })
+}
+
 // ─── Hooks ────────────────────────────────────────────────────────────────────
 
 export function useListProducts(
@@ -353,4 +391,41 @@ export function useSetCover() {
             queryClient.invalidateQueries({ queryKey: keys.products.all(data.enterpriseId) })
         },
     })
+}
+
+// ─── Scan URL ─────────────────────────────────────────────────────────────────
+
+export type ScannedProduct = {
+    name: string
+    description?: string | null
+    price?: number
+    sku?: string | null
+    category?: string | null
+    imageUrl?: string | null
+}
+
+export type ScanUrlResult = {
+    products: ScannedProduct[]
+    count: number
+}
+
+async function scanProductUrlFn({
+    enterpriseId,
+    url,
+    agentId,
+}: {
+    enterpriseId: string
+    url: string
+    agentId: string
+}): Promise<ScanUrlResult> {
+    const { data } = await api.post<ScanUrlResult>(
+        `/products/${enterpriseId}/scan-url`,
+        { url, agentId },
+        { headers: { 'X-Enterprise-Id': enterpriseId } },
+    )
+    return data
+}
+
+export function useScanProductUrl() {
+    return useMutation({ mutationFn: scanProductUrlFn })
 }

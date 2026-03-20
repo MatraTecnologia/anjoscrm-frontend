@@ -313,10 +313,99 @@ function ConversationItem({
 
 // ─── Media content ────────────────────────────────────────────────────────────
 
-function MediaContent({ mediaType, mediaUrl, content }: {
+// ─── Custom audio player ──────────────────────────────────────────────────────
+
+function AudioPlayer({ src, isOut }: { src: string; isOut: boolean }) {
+    const audioRef = React.useRef<HTMLAudioElement>(null)
+    const [playing, setPlaying] = React.useState(false)
+    const [current, setCurrent] = React.useState(0)
+    const [duration, setDuration] = React.useState(0)
+
+    function toggle() {
+        const audio = audioRef.current
+        if (!audio) return
+        if (playing) audio.pause()
+        else audio.play().catch(() => null)
+    }
+
+    function fmt(s: number) {
+        if (!isFinite(s) || isNaN(s)) return '0:00'
+        const m = Math.floor(s / 60)
+        const ss = Math.floor(s % 60)
+        return `${m}:${ss.toString().padStart(2, '0')}`
+    }
+
+    const pct = duration > 0 ? (current / duration) * 100 : 0
+
+    return (
+        <div className="flex items-center gap-2 w-full min-w-[200px] py-0.5">
+            <audio
+                ref={audioRef}
+                src={src}
+                onPlay={() => setPlaying(true)}
+                onPause={() => setPlaying(false)}
+                onEnded={() => { setPlaying(false); setCurrent(0) }}
+                onTimeUpdate={() => setCurrent(audioRef.current?.currentTime ?? 0)}
+                onLoadedMetadata={() => setDuration(audioRef.current?.duration ?? 0)}
+            />
+            <button
+                onClick={toggle}
+                className={cn(
+                    'flex size-8 shrink-0 items-center justify-center rounded-full transition-colors',
+                    isOut
+                        ? 'bg-white/20 hover:bg-white/30'
+                        : 'bg-primary/10 hover:bg-primary/20',
+                )}
+            >
+                {playing
+                    ? <PauseCircle className="size-5" />
+                    : <PlayCircle className="size-5" />
+                }
+            </button>
+            <div className="flex flex-col flex-1 gap-1 min-w-0">
+                <div
+                    className="relative h-1.5 rounded-full overflow-hidden cursor-pointer"
+                    style={{ background: isOut ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.12)' }}
+                >
+                    <div
+                        className="absolute inset-y-0 left-0 rounded-full transition-[width]"
+                        style={{
+                            width: `${pct}%`,
+                            background: isOut ? 'rgba(255,255,255,0.8)' : 'var(--primary)',
+                        }}
+                    />
+                    <input
+                        type="range"
+                        min={0}
+                        max={duration || 0}
+                        step={0.1}
+                        value={current}
+                        onChange={(e) => {
+                            const t = Number(e.target.value)
+                            setCurrent(t)
+                            if (audioRef.current) audioRef.current.currentTime = t
+                        }}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    />
+                </div>
+                <span className={cn(
+                    'text-[10px]',
+                    isOut ? 'text-primary-foreground/60' : 'text-muted-foreground',
+                )}>
+                    {fmt(current)} / {fmt(duration)}
+                </span>
+            </div>
+        </div>
+    )
+}
+
+// ─── Media content ─────────────────────────────────────────────────────────────
+
+function MediaContent({ mediaType, mediaUrl, content, isOut = false }: {
     mediaType: string
     mediaUrl: string | null | undefined
     content: string
+    isOut?: boolean
 }) {
     if (mediaType === 'image' || mediaType === 'sticker') {
         return mediaUrl ? (
@@ -355,7 +444,7 @@ function MediaContent({ mediaType, mediaUrl, content }: {
 
     if (mediaType === 'audio' || mediaType === 'ptt') {
         return mediaUrl ? (
-            <audio src={mediaUrl} controls className="w-full max-w-[260px]" />
+            <AudioPlayer src={mediaUrl} isOut={isOut} />
         ) : (
             <div className="flex items-center gap-2 text-sm opacity-70">
                 <MicIcon className="size-4 shrink-0" />
@@ -465,14 +554,25 @@ function MessageBubble({ msg, isFirst, isLast }: {
                             mediaType={msg.mediaType!}
                             mediaUrl={msg.mediaUrl}
                             content={msg.content}
+                            isOut={isOut}
                         />
                     </div>
                 )}
 
                 {msg.content && (
-                    <p className="break-words leading-relaxed whitespace-pre-wrap px-1">
-                        {parseWaMarkdown(msg.content)}
-                    </p>
+                    (msg.mediaType === 'audio' || msg.mediaType === 'ptt') ? (
+                        <div className={cn(
+                            'flex items-start gap-1 px-1 mt-1 text-xs italic',
+                            isOut ? 'text-primary-foreground/70' : 'text-muted-foreground',
+                        )}>
+                            <MicIcon className="size-3 shrink-0 mt-0.5 opacity-60" />
+                            <span className="break-words leading-relaxed">{msg.content}</span>
+                        </div>
+                    ) : (
+                        <p className="break-words leading-relaxed whitespace-pre-wrap px-1">
+                            {parseWaMarkdown(msg.content)}
+                        </p>
+                    )
                 )}
 
                 <div className={cn(

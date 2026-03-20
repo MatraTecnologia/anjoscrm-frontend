@@ -6,6 +6,14 @@ import { keys } from '@/lib/keys'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+export type PixKeyType = 'phone' | 'cnpj' | 'email' | 'random'
+
+export type PaymentMethods = {
+    pix?: { enabled: boolean; keyType: PixKeyType; key: string }
+    bank_transfer?: { enabled: boolean; bank: string; agency: string; account: string; holder: string }
+    boleto?: { enabled: boolean }
+}
+
 export type AiAgentProduct = {
     product: {
         id: string
@@ -69,6 +77,7 @@ export type AiAgent = {
     pipelineId: string | null
     assignmentStrategy: string
     fixedOwnerId: string | null
+    paymentMethods: PaymentMethods | null
     createdAt: string
     updatedAt: string
     // relações
@@ -104,6 +113,7 @@ export type CreateAgentPayload = {
     productIds?: string[]
     assignmentStrategy?: string
     fixedOwnerId?: string | null
+    paymentMethods?: PaymentMethods | null
 }
 
 export type UpdateAgentPayload = Partial<CreateAgentPayload>

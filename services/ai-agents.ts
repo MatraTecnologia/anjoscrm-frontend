@@ -230,14 +230,17 @@ async function pauseLeadFn({
     agentId,
     leadId,
     reason,
+    enterpriseId,
 }: {
     agentId: string
     leadId: string
     reason?: string
+    enterpriseId: string
 }): Promise<AiLeadState> {
     const { data } = await api.post<AiLeadState>(
         `/ai-agents/${agentId}/lead-states/${leadId}/pause`,
         { reason },
+        { headers: { 'X-Enterprise-Id': enterpriseId } },
     )
     return data
 }
@@ -245,12 +248,16 @@ async function pauseLeadFn({
 async function resumeLeadFn({
     agentId,
     leadId,
+    enterpriseId,
 }: {
     agentId: string
     leadId: string
+    enterpriseId: string
 }): Promise<{ updated: number }> {
     const { data } = await api.post<{ updated: number }>(
         `/ai-agents/${agentId}/lead-states/${leadId}/resume`,
+        {},
+        { headers: { 'X-Enterprise-Id': enterpriseId } },
     )
     return data
 }

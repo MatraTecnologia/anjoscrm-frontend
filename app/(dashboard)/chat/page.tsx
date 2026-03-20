@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useRef, useEffect, useCallback } from 'react'
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import {
     Search, Filter, MessageCircle, Send, Loader2,
     Check, CheckCheck, Wifi, WifiOff,
@@ -9,7 +9,7 @@ import {
     Eye, EyeOff, ArrowUpDown, Clock,
     Users, MessageSquare, Inbox,
     UserPlus, UserMinus, ChevronDown,
-    Paperclip,
+    Paperclip, Bot, PauseCircle, PlayCircle, PowerOff, AlertTriangle,
 } from 'lucide-react'
 import { formatDistanceToNow, format, isToday, isYesterday, startOfDay, subDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -51,6 +51,7 @@ import {
 import { useConnections } from '@/services/connections'
 import { useLead, useUpdateLead } from '@/services/leads'
 import { useMembers } from '@/services/enterprises'
+import { usePauseLead, useResumeLead, useToggleAiAgent } from '@/services/ai-agents'
 import { LeadSheet } from '@/components/lead-sheet'
 import { keys } from '@/lib/keys'
 
@@ -193,9 +194,31 @@ function ConversationItem({
                             )}>
                                 {conv.lead.name}
                             </span>
-                            <span className="text-[11px] text-muted-foreground shrink-0">
-                                {formatTime(conv.lastMessage.sentAt)}
-                            </span>
+                            <div className="flex items-center gap-1 shrink-0">
+                                {/* Badge escalação */}
+                                {conv.aiState?.isPaused && (conv.aiState.pauseReason === 'requested_human' || conv.aiState.pauseReason === 'fallback_to_human') && (
+                                    <span
+                                        className="flex items-center gap-0.5 rounded-full bg-orange-500/15 px-1.5 py-0.5 text-[10px] font-medium text-orange-600"
+                                        title="Lead solicitou atendimento humano"
+                                    >
+                                        <AlertTriangle className="size-2.5" />
+                                        Escalado
+                                    </span>
+                                )}
+                                {/* Badge IA ativa */}
+                                {conv.aiState && !conv.aiState.isPaused && (
+                                    <span
+                                        className="flex items-center gap-0.5 rounded-full bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-medium text-violet-600"
+                                        title={`IA ativa: ${conv.aiState.agentName}`}
+                                    >
+                                        <Bot className="size-2.5" />
+                                        IA
+                                    </span>
+                                )}
+                                <span className="text-[11px] text-muted-foreground">
+                                    {formatTime(conv.lastMessage.sentAt)}
+                                </span>
+                            </div>
                         </div>
                         <div className="flex items-center justify-between gap-1">
                             <p className={cn(
@@ -509,9 +532,13 @@ function ChatWindow({
     const textareaRef = useRef<HTMLTextAreaElement>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
 
+    const queryClient = useQueryClient()
     const { data: messages = [], isLoading } = useMessages(enterpriseId, conv.connectionId, conv.leadId)
     const { mutate: send, isPending: sending } = useSendMessage()
     const { mutate: sendMedia, isPending: sendingMedia } = useSendMedia()
+    const { mutate: pauseLead, isPending: pausing } = usePauseLead()
+    const { mutate: resumeLead, isPending: resuming } = useResumeLead()
+    const { mutate: toggleAgent, isPending: toggling } = useToggleAiAgent()
     const { data: fullLead } = useLead(enterpriseId, conv.leadId, leadSheetOpen)
 
     const filteredMembers = memberSearch
@@ -775,6 +802,99 @@ function ChatWindow({
 
             {/* Input */}
             <div className="border-t bg-background px-4 py-3 shrink-0">
+                {/* Banner status IA */}
+                {conv.aiState && (
+                    <div className={cn(
+                        'flex items-center gap-2 mb-2 rounded-xl px-3 py-2 text-xs',
+                        conv.aiState.isPaused
+                            ? (conv.aiState.pauseReason === 'requested_human' || conv.aiState.pauseReason === 'fallback_to_human')
+                                ? 'bg-orange-500/10 text-orange-700 dark:text-orange-400'
+                                : 'bg-muted text-muted-foreground'
+                            : 'bg-violet-500/10 text-violet-700 dark:text-violet-400',
+                    )}>
+                        <Bot className="size-3.5 shrink-0" />
+                        <span className="flex-1 leading-tight">
+                            {conv.aiState.isPaused
+                                ? (conv.aiState.pauseReason === 'requested_human' || conv.aiState.pauseReason === 'fallback_to_human')
+                                    ? `Lead solicitou atendimento humano • ${conv.aiState.agentName} pausado`
+                                    : `Você assumiu este atendimento • ${conv.aiState.agentName} pausado`
+                                : `IA ${conv.aiState.agentName} está atendendo este lead`
+                            }
+                        </span>
+                        {conv.aiState.isPaused ? (
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-6 px-2 text-xs shrink-0"
+                                disabled={resuming}
+                                onClick={() => resumeLead(
+                                    { agentId: conv.aiState!.agentId, leadId: conv.leadId, enterpriseId },
+                                    {
+                                        onSuccess: () => {
+                                            queryClient.invalidateQueries({ queryKey: keys.chat.messages('all', enterpriseId) })
+                                            toast.success('IA reativada para este lead.')
+                                        },
+                                        onError: () => toast.error('Erro ao reativar IA.'),
+                                    },
+                                )}
+                            >
+                                {resuming
+                                    ? <Loader2 className="size-3 animate-spin" />
+                                    : <PlayCircle className="size-3 mr-1" />
+                                }
+                                Reativar IA
+                            </Button>
+                        ) : (
+                            <>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-6 px-2 text-xs shrink-0"
+                                    disabled={pausing}
+                                    onClick={() => pauseLead(
+                                        { agentId: conv.aiState!.agentId, leadId: conv.leadId, enterpriseId },
+                                        {
+                                            onSuccess: () => {
+                                                queryClient.invalidateQueries({ queryKey: keys.chat.messages('all', enterpriseId) })
+                                                toast.success('IA pausada para este lead.')
+                                            },
+                                            onError: () => toast.error('Erro ao pausar IA.'),
+                                        },
+                                    )}
+                                >
+                                    {pausing
+                                        ? <Loader2 className="size-3 animate-spin" />
+                                        : <PauseCircle className="size-3 mr-1" />
+                                    }
+                                    Pausar
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-6 px-2 text-xs shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                    disabled={toggling}
+                                    onClick={() => toggleAgent(
+                                        { id: conv.aiState!.agentId, enterpriseId },
+                                        {
+                                            onSuccess: () => {
+                                                queryClient.invalidateQueries({ queryKey: keys.chat.messages('all', enterpriseId) })
+                                                toast.success('IA desligada globalmente.')
+                                            },
+                                            onError: () => toast.error('Erro ao desligar IA.'),
+                                        },
+                                    )}
+                                >
+                                    {toggling
+                                        ? <Loader2 className="size-3 animate-spin" />
+                                        : <PowerOff className="size-3 mr-1" />
+                                    }
+                                    Desligar IA
+                                </Button>
+                            </>
+                        )}
+                    </div>
+                )}
+
                 {!isConnected && (
                     <div className="flex items-center gap-2 mb-2 text-xs text-amber-600 bg-amber-500/10 rounded-lg px-3 py-2">
                         <WifiOff className="size-3.5 shrink-0" />
@@ -1188,6 +1308,14 @@ export default function ChatPage() {
 
     useChatSocket(enterpriseId)
 
+    // Deriva a conversa ativa do cache ao vivo para que aiState reflita mudanças em tempo real
+    const activeConv = useMemo(
+        () => selectedConv
+            ? conversations.find(c => c.connectionId === selectedConv.connectionId && c.leadId === selectedConv.leadId) ?? selectedConv
+            : null,
+        [selectedConv, conversations],
+    )
+
     // ── Filtros locais ──────────────────────────────────────────────────────
 
     const filtered = conversations
@@ -1473,11 +1601,11 @@ export default function ChatPage() {
 
             {/* ── Right panel ────────────────────────────────────────────── */}
             <div className="flex-1 min-w-0">
-                {selectedConv
+                {activeConv
                     ? <ChatWindow
-                        conv={selectedConv}
+                        conv={activeConv}
                         enterpriseId={enterpriseId}
-                        onAssign={(assigneeId) => assignConv(selectedConv, assigneeId)}
+                        onAssign={(assigneeId) => assignConv(activeConv, assigneeId)}
                         members={members}
                     />
                     : <EmptyState />

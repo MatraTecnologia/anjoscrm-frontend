@@ -40,6 +40,12 @@ export type Conversation = {
         isRead: boolean
     }
     unreadCount: number
+    aiState: {
+        agentId: string
+        agentName: string
+        isPaused: boolean
+        pauseReason: string | null
+    } | null
 }
 
 // ─── API ──────────────────────────────────────────────────────────────────────

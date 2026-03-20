@@ -17,9 +17,27 @@ export type Product = {
     enterpriseId: string
     name: string
     description: string | null
+    // Preços
     price: number
+    priceMin: number | null
+    pricePromo: number | null
+    promoLabel: string | null
+    // Parcelamento
+    maxInstallments: number | null
+    installmentsNote: string | null
+    // Identificação
     sku: string | null
     category: string | null
+    unit: string | null
+    // Estoque e Logística
+    stock: number | null
+    warranty: string | null
+    deliveryInfo: string | null
+    externalUrl: string | null
+    // IA
+    salesPitch: string | null
+    commonObjections: string | null
+    // Misc
     tags: string[]
     colors: string[]
     status: string
@@ -32,8 +50,20 @@ export type CreateProductPayload = {
     name: string
     description?: string | null
     price?: number
+    priceMin?: number | null
+    pricePromo?: number | null
+    promoLabel?: string | null
+    maxInstallments?: number | null
+    installmentsNote?: string | null
     sku?: string | null
     category?: string | null
+    unit?: string | null
+    stock?: number | null
+    warranty?: string | null
+    deliveryInfo?: string | null
+    externalUrl?: string | null
+    salesPitch?: string | null
+    commonObjections?: string | null
     tags?: string[]
     colors?: string[]
     status?: string

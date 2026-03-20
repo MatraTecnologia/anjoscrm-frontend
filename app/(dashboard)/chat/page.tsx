@@ -5,23 +5,35 @@ import {
     Search, Filter, MessageCircle, Send, Loader2,
     Check, CheckCheck, Wifi, WifiOff,
     Phone, MoreVertical, X, User,
-    ImageIcon, VideoIcon, FileIcon, StickerIcon, MicIcon,
+    ImageIcon, VideoIcon, FileIcon, MicIcon,
+    Eye, EyeOff, ArrowUpDown, Clock, SortDesc,
+    Users, MessageSquare, Inbox,
 } from 'lucide-react'
-import { formatDistanceToNow, format, isToday, isYesterday } from 'date-fns'
+import { formatDistanceToNow, format, isToday, isYesterday, startOfDay, subDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { toast } from 'sonner'
+import { useQueryClient } from '@tanstack/react-query'
 
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Switch } from '@/components/ui/switch'
+import { Label } from '@/components/ui/label'
+import { Separator } from '@/components/ui/separator'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
     Sheet, SheetContent, SheetHeader, SheetTitle,
 } from '@/components/ui/sheet'
 import {
-    DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem,
-    DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuLabel,
-} from '@/components/ui/dropdown-menu'
+    ContextMenu,
+    ContextMenuContent,
+    ContextMenuItem,
+    ContextMenuSeparator,
+    ContextMenuTrigger,
+} from '@/components/ui/context-menu'
 
 import { useEnterprise } from '@/hooks/use-enterprise'
 import {
@@ -31,6 +43,7 @@ import {
 import { useConnections } from '@/services/connections'
 import { useLead } from '@/services/leads'
 import { LeadSheet } from '@/components/lead-sheet'
+import { keys } from '@/lib/keys'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -76,81 +89,137 @@ function ConversationItem({
     conv,
     isActive,
     onClick,
+    isSelected,
+    onSelect,
+    selectionMode,
+    onOpenLead,
+    onMarkRead,
+    onMarkUnread,
 }: {
     conv: Conversation
     isActive: boolean
     onClick: () => void
+    isSelected: boolean
+    onSelect: () => void
+    selectionMode: boolean
+    onOpenLead: () => void
+    onMarkRead: () => void
+    onMarkUnread: () => void
 }) {
     const isInbound = conv.lastMessage.direction === 'INBOUND'
     const isWhatsApp = conv.connection.type === 'WHATSAPP'
 
     return (
-        <button
-            onClick={onClick}
-            className={cn(
-                'w-full flex items-center gap-3 px-3 py-3 text-left transition-colors border-b border-border/40',
-                'hover:bg-muted/60',
-                isActive && 'bg-primary/5 border-l-2 border-l-primary',
-            )}
-        >
-            {/* Avatar */}
-            <div className="relative shrink-0">
-                {conv.lead.image ? (
-                    <img src={conv.lead.image} alt={conv.lead.name} className="size-10 rounded-full object-cover" />
-                ) : (
-                    <div className={cn(
-                        'flex size-10 items-center justify-center rounded-full text-white text-xs font-semibold',
-                        getAvatarColor(conv.lead.name),
-                    )}>
-                        {getInitials(conv.lead.name)}
-                    </div>
-                )}
-                {/* Connection type indicator */}
-                {isWhatsApp && (
-                    <div className="absolute -bottom-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full bg-green-500 ring-1 ring-background">
-                        <WhatsAppIcon className="size-2.5 text-white" />
-                    </div>
-                )}
-            </div>
-
-            {/* Content */}
-            <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-1 mb-0.5">
-                    <span className={cn(
-                        'text-sm truncate',
-                        conv.unreadCount > 0 ? 'font-semibold' : 'font-medium',
-                    )}>
-                        {conv.lead.name}
-                    </span>
-                    <span className="text-[11px] text-muted-foreground shrink-0">
-                        {formatTime(conv.lastMessage.sentAt)}
-                    </span>
-                </div>
-                <div className="flex items-center justify-between gap-1">
-                    <p className={cn(
-                        'text-xs truncate flex-1',
-                        conv.unreadCount > 0 ? 'text-foreground' : 'text-muted-foreground',
-                    )}>
-                        {!isInbound && (
-                            <span className="mr-1 text-muted-foreground">
-                                {conv.lastMessage.isRead ? <CheckCheck className="inline size-3 text-blue-500" /> : <Check className="inline size-3" />}
-                            </span>
-                        )}
-                        {conv.lastMessage.content
-                            ? (conv.lastMessage.content.length > 40
-                                ? conv.lastMessage.content.slice(0, 40) + '...'
-                                : conv.lastMessage.content)
-                            : <span className="italic opacity-60">Mídia</span>
-                        }
-                    </p>
-                    {conv.unreadCount > 0 && (
-                        <Badge className="h-4 min-w-4 px-1 text-[10px] shrink-0 bg-green-500 hover:bg-green-500 text-white rounded-full">
-                            {conv.unreadCount > 99 ? '99+' : conv.unreadCount}
-                        </Badge>
+        <ContextMenu>
+            <ContextMenuTrigger asChild>
+                <div
+                    className={cn(
+                        'group relative w-full flex items-center gap-2 px-3 py-3 text-left transition-colors border-b border-border/40 cursor-pointer select-none',
+                        'hover:bg-muted/60',
+                        isActive && 'bg-primary/5 border-l-2 border-l-primary',
+                        isSelected && 'bg-primary/10',
                     )}
+                    onClick={onClick}
+                >
+                    {/* Checkbox de seleção */}
+                    <div
+                        className={cn(
+                            'shrink-0 transition-all duration-150',
+                            selectionMode ? 'w-5 opacity-100' : 'w-0 opacity-0 overflow-hidden group-hover:w-5 group-hover:opacity-100',
+                        )}
+                        onClick={e => { e.stopPropagation(); onSelect() }}
+                    >
+                        <Checkbox
+                            checked={isSelected}
+                            className="size-4"
+                            onCheckedChange={() => onSelect()}
+                        />
+                    </div>
+
+                    {/* Avatar */}
+                    <div className="relative shrink-0">
+                        {conv.lead.image ? (
+                            <img src={conv.lead.image} alt={conv.lead.name} className="size-10 rounded-full object-cover" />
+                        ) : (
+                            <div className={cn(
+                                'flex size-10 items-center justify-center rounded-full text-white text-xs font-semibold',
+                                getAvatarColor(conv.lead.name),
+                            )}>
+                                {getInitials(conv.lead.name)}
+                            </div>
+                        )}
+                        {isWhatsApp && (
+                            <div className="absolute -bottom-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full bg-green-500 ring-1 ring-background">
+                                <WhatsAppIcon className="size-2.5 text-white" />
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-1 mb-0.5">
+                            <span className={cn(
+                                'text-sm truncate',
+                                conv.unreadCount > 0 ? 'font-semibold' : 'font-medium',
+                            )}>
+                                {conv.lead.name}
+                            </span>
+                            <span className="text-[11px] text-muted-foreground shrink-0">
+                                {formatTime(conv.lastMessage.sentAt)}
+                            </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-1">
+                            <p className={cn(
+                                'text-xs truncate flex-1',
+                                conv.unreadCount > 0 ? 'text-foreground' : 'text-muted-foreground',
+                            )}>
+                                {!isInbound && (
+                                    <span className="mr-1 text-muted-foreground">
+                                        {conv.lastMessage.isRead ? <CheckCheck className="inline size-3 text-blue-500" /> : <Check className="inline size-3" />}
+                                    </span>
+                                )}
+                                {conv.lastMessage.content
+                                    ? (conv.lastMessage.content.length > 40
+                                        ? conv.lastMessage.content.slice(0, 40) + '...'
+                                        : conv.lastMessage.content)
+                                    : <span className="italic opacity-60">Mídia</span>
+                                }
+                            </p>
+                            {conv.unreadCount > 0 && (
+                                <Badge className="h-4 min-w-4 px-1 text-[10px] shrink-0 bg-green-500 hover:bg-green-500 text-white rounded-full">
+                                    {conv.unreadCount > 99 ? '99+' : conv.unreadCount}
+                                </Badge>
+                            )}
+                        </div>
+                    </div>
                 </div>
-            </div>
-        </button>
+            </ContextMenuTrigger>
+
+            <ContextMenuContent className="w-52">
+                <ContextMenuItem onClick={onClick}>
+                    <MessageSquare className="size-4 mr-2" />
+                    Abrir conversa
+                </ContextMenuItem>
+                <ContextMenuItem onClick={onOpenLead}>
+                    <User className="size-4 mr-2" />
+                    Ver dados do lead
+                </ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem onClick={onMarkRead}>
+                    <Eye className="size-4 mr-2" />
+                    Marcar como lido
+                </ContextMenuItem>
+                <ContextMenuItem onClick={onMarkUnread}>
+                    <EyeOff className="size-4 mr-2" />
+                    Marcar como não lido
+                </ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem onClick={() => { onSelect() }}>
+                    <Users className="size-4 mr-2" />
+                    {isSelected ? 'Desmarcar' : 'Selecionar'}
+                </ContextMenuItem>
+            </ContextMenuContent>
+        </ContextMenu>
     )
 }
 
@@ -259,7 +328,6 @@ function MessageBubble({ msg, isFirst, isLast }: {
                 !isFirst && isOut && 'rounded-tr-lg',
                 !isFirst && !isOut && 'rounded-tl-lg',
             )}>
-                {/* Mídia */}
                 {hasMedia && (
                     <div className="mb-1">
                         <MediaContent
@@ -270,7 +338,6 @@ function MessageBubble({ msg, isFirst, isLast }: {
                     </div>
                 )}
 
-                {/* Legenda de texto (só exibe se houver conteúdo além da mídia) */}
                 {msg.content && (
                     <p className="break-words leading-relaxed whitespace-pre-wrap px-1">{msg.content}</p>
                 )}
@@ -326,12 +393,10 @@ function ChatWindow({
     const { mutate: send, isPending: sending } = useSendMessage()
     const { data: fullLead } = useLead(enterpriseId, conv.leadId, leadSheetOpen)
 
-    // Auto scroll
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }, [messages.length])
 
-    // Auto resize textarea
     useEffect(() => {
         const el = textareaRef.current
         if (!el) return
@@ -364,7 +429,6 @@ function ChatWindow({
         }
     }
 
-    // Agrupar mensagens por data e por remetente consecutivo
     const grouped: { date: string; msgs: (ChatMessage & { isFirst: boolean; isLast: boolean })[] }[] = []
 
     messages.forEach((msg, i) => {
@@ -544,85 +608,230 @@ function EmptyState() {
     )
 }
 
+// ─── Filter types ─────────────────────────────────────────────────────────────
+
+type SortOrder = 'recent' | 'oldest' | 'unread_first'
+type FilterPeriod = 'all' | 'today' | '7d' | '30d'
+
 // ─── Filter panel ─────────────────────────────────────────────────────────────
 
 function FilterPanel({
     open,
     onClose,
     connections,
+    // Instâncias
     selectedConnections,
     onConnectionChange,
+    filterConnectedOnly,
+    onFilterConnectedOnlyChange,
+    // Mensagens
     filterUnread,
     onFilterUnreadChange,
+    filterWaiting,
+    onFilterWaitingChange,
+    // Período
+    filterPeriod,
+    onFilterPeriodChange,
+    // Ordenação
+    sortOrder,
+    onSortOrderChange,
+    // Limpar
+    onClear,
+    activeFilters,
 }: {
     open: boolean
     onClose: () => void
-    connections: { id: string; name: string; type: string }[]
+    connections: { id: string; name: string; type: string; status: string }[]
     selectedConnections: string[]
     onConnectionChange: (id: string) => void
+    filterConnectedOnly: boolean
+    onFilterConnectedOnlyChange: (v: boolean) => void
     filterUnread: boolean
     onFilterUnreadChange: (v: boolean) => void
+    filterWaiting: boolean
+    onFilterWaitingChange: (v: boolean) => void
+    filterPeriod: FilterPeriod
+    onFilterPeriodChange: (v: FilterPeriod) => void
+    sortOrder: SortOrder
+    onSortOrderChange: (v: SortOrder) => void
+    onClear: () => void
+    activeFilters: number
 }) {
     return (
         <Sheet open={open} onOpenChange={onClose}>
-            <SheetContent side="right" className="w-80">
-                <SheetHeader>
-                    <SheetTitle>Filtros</SheetTitle>
+            <SheetContent side="left" className="w-80 flex flex-col p-0 gap-0">
+                {/* Header */}
+                <SheetHeader className="px-5 py-4 border-b shrink-0">
+                    <div className="flex items-center justify-between">
+                        <SheetTitle className="text-base">Filtros</SheetTitle>
+                        {activeFilters > 0 && (
+                            <Badge variant="secondary" className="text-xs px-2">
+                                {activeFilters} {activeFilters === 1 ? 'ativo' : 'ativos'}
+                            </Badge>
+                        )}
+                    </div>
                 </SheetHeader>
 
-                <div className="flex flex-col gap-6 mt-6">
-                    {/* Instâncias */}
-                    <div>
-                        <p className="text-sm font-medium mb-3">Instâncias</p>
-                        <div className="flex flex-col gap-1">
+                {/* Body com scroll */}
+                <ScrollArea className="flex-1">
+                    <div className="px-5 py-5 flex flex-col gap-6">
+
+                        {/* ── Ordenação ─────────────────────────────────── */}
+                        <div>
+                            <div className="flex items-center gap-2 mb-3">
+                                <ArrowUpDown className="size-3.5 text-muted-foreground" />
+                                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Ordenação</p>
+                            </div>
+                            <RadioGroup
+                                value={sortOrder}
+                                onValueChange={v => onSortOrderChange(v as SortOrder)}
+                                className="flex flex-col gap-1.5"
+                            >
+                                {[
+                                    { value: 'recent', label: 'Mais recente' },
+                                    { value: 'oldest', label: 'Mais antigo' },
+                                    { value: 'unread_first', label: 'Não lidos primeiro' },
+                                ].map(opt => (
+                                    <div key={opt.value} className="flex items-center gap-2.5 py-1">
+                                        <RadioGroupItem value={opt.value} id={`sort-${opt.value}`} />
+                                        <Label htmlFor={`sort-${opt.value}`} className="text-sm cursor-pointer font-normal">
+                                            {opt.label}
+                                        </Label>
+                                    </div>
+                                ))}
+                            </RadioGroup>
+                        </div>
+
+                        <Separator />
+
+                        {/* ── Período ───────────────────────────────────── */}
+                        <div>
+                            <div className="flex items-center gap-2 mb-3">
+                                <Clock className="size-3.5 text-muted-foreground" />
+                                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Período</p>
+                            </div>
+                            <RadioGroup
+                                value={filterPeriod}
+                                onValueChange={v => onFilterPeriodChange(v as FilterPeriod)}
+                                className="flex flex-col gap-1.5"
+                            >
+                                {[
+                                    { value: 'all', label: 'Todos' },
+                                    { value: 'today', label: 'Hoje' },
+                                    { value: '7d', label: 'Últimos 7 dias' },
+                                    { value: '30d', label: 'Últimos 30 dias' },
+                                ].map(opt => (
+                                    <div key={opt.value} className="flex items-center gap-2.5 py-1">
+                                        <RadioGroupItem value={opt.value} id={`period-${opt.value}`} />
+                                        <Label htmlFor={`period-${opt.value}`} className="text-sm cursor-pointer font-normal">
+                                            {opt.label}
+                                        </Label>
+                                    </div>
+                                ))}
+                            </RadioGroup>
+                        </div>
+
+                        <Separator />
+
+                        {/* ── Mensagens ─────────────────────────────────── */}
+                        <div>
+                            <div className="flex items-center gap-2 mb-3">
+                                <MessageCircle className="size-3.5 text-muted-foreground" />
+                                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Mensagens</p>
+                            </div>
+                            <div className="flex flex-col gap-3">
+                                <div className="flex items-center justify-between">
+                                    <Label htmlFor="filter-unread" className="text-sm cursor-pointer font-normal">
+                                        Apenas não lidas
+                                    </Label>
+                                    <Switch
+                                        id="filter-unread"
+                                        checked={filterUnread}
+                                        onCheckedChange={onFilterUnreadChange}
+                                    />
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <Label htmlFor="filter-waiting" className="text-sm cursor-pointer font-normal">
+                                        Aguardando resposta
+                                    </Label>
+                                    <Switch
+                                        id="filter-waiting"
+                                        checked={filterWaiting}
+                                        onCheckedChange={onFilterWaitingChange}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <Separator />
+
+                        {/* ── Instâncias ────────────────────────────────── */}
+                        <div>
+                            <div className="flex items-center gap-2 mb-3">
+                                <Inbox className="size-3.5 text-muted-foreground" />
+                                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Instâncias</p>
+                            </div>
+
+                            {/* Somente conectadas */}
+                            <div className="flex items-center justify-between mb-3">
+                                <Label htmlFor="filter-connected" className="text-sm cursor-pointer font-normal">
+                                    Somente conectadas
+                                </Label>
+                                <Switch
+                                    id="filter-connected"
+                                    checked={filterConnectedOnly}
+                                    onCheckedChange={onFilterConnectedOnlyChange}
+                                />
+                            </div>
+
                             {connections.length === 0 ? (
                                 <p className="text-xs text-muted-foreground">Nenhuma conexão ativa</p>
                             ) : (
-                                connections.map(c => (
-                                    <label key={c.id} className="flex items-center gap-2.5 cursor-pointer py-1.5">
-                                        <input
-                                            type="checkbox"
-                                            className="rounded"
-                                            checked={selectedConnections.includes(c.id)}
-                                            onChange={() => onConnectionChange(c.id)}
-                                        />
-                                        <div className="flex items-center gap-2">
-                                            {c.type === 'WHATSAPP' && (
-                                                <WhatsAppIcon className="size-4 text-green-500" />
-                                            )}
-                                            <span className="text-sm">{c.name}</span>
-                                        </div>
-                                    </label>
-                                ))
+                                <div className="flex flex-col gap-1">
+                                    {connections.map(c => (
+                                        <label
+                                            key={c.id}
+                                            className="flex items-center gap-2.5 cursor-pointer py-1.5 rounded-md px-1 hover:bg-muted/50 transition-colors"
+                                        >
+                                            <Checkbox
+                                                checked={selectedConnections.includes(c.id)}
+                                                onCheckedChange={() => onConnectionChange(c.id)}
+                                                className="size-4"
+                                            />
+                                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                {c.type === 'WHATSAPP' && (
+                                                    <WhatsAppIcon className="size-4 text-green-500 shrink-0" />
+                                                )}
+                                                <span className="text-sm truncate">{c.name}</span>
+                                            </div>
+                                            <span className={cn(
+                                                'text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0',
+                                                c.status === 'CONNECTED'
+                                                    ? 'bg-green-500/10 text-green-600'
+                                                    : 'bg-muted text-muted-foreground',
+                                            )}>
+                                                {c.status === 'CONNECTED' ? 'ativo' : 'inativo'}
+                                            </span>
+                                        </label>
+                                    ))}
+                                </div>
                             )}
                         </div>
                     </div>
+                </ScrollArea>
 
-                    {/* Não lidos */}
-                    <div>
-                        <p className="text-sm font-medium mb-3">Mensagens</p>
-                        <label className="flex items-center gap-2.5 cursor-pointer py-1.5">
-                            <input
-                                type="checkbox"
-                                className="rounded"
-                                checked={filterUnread}
-                                onChange={e => onFilterUnreadChange(e.target.checked)}
-                            />
-                            <span className="text-sm">Apenas não lidas</span>
-                        </label>
-                    </div>
-                </div>
-
-                <div className="mt-auto pt-6 border-t">
+                {/* Footer */}
+                <div className="px-5 py-4 border-t flex gap-2 shrink-0">
                     <Button
                         variant="outline"
-                        className="w-full"
-                        onClick={() => {
-                            selectedConnections.forEach(id => onConnectionChange(id))
-                            onFilterUnreadChange(false)
-                        }}
+                        className="flex-1"
+                        onClick={onClear}
+                        disabled={activeFilters === 0}
                     >
                         Limpar filtros
+                    </Button>
+                    <Button className="flex-1" onClick={onClose}>
+                        Aplicar
                     </Button>
                 </div>
             </SheetContent>
@@ -637,27 +846,68 @@ type Tab = 'all' | 'unread' | 'waiting'
 export default function ChatPage() {
     const { enterprise } = useEnterprise()
     const enterpriseId = enterprise?.id ?? ''
+    const queryClient = useQueryClient()
 
+    // UI state
     const [search, setSearch] = useState('')
     const [tab, setTab] = useState<Tab>('all')
     const [selectedConv, setSelectedConv] = useState<Conversation | null>(null)
     const [filterOpen, setFilterOpen] = useState(false)
+
+    // Seleção em massa
+    const [selected, setSelected] = useState<Set<string>>(new Set())
+    const selectionMode = selected.size > 0
+
+    // Filtros
     const [selectedConnections, setSelectedConnections] = useState<string[]>([])
     const [filterUnread, setFilterUnread] = useState(false)
+    const [filterWaiting, setFilterWaiting] = useState(false)
+    const [filterConnectedOnly, setFilterConnectedOnly] = useState(false)
+    const [filterPeriod, setFilterPeriod] = useState<FilterPeriod>('all')
+    const [sortOrder, setSortOrder] = useState<SortOrder>('recent')
+
+    // Lead sheet aberto via context menu
+    const [ctxLeadConv, setCtxLeadConv] = useState<Conversation | null>(null)
+    const { data: ctxLead } = useLead(enterpriseId, ctxLeadConv?.leadId ?? '', !!ctxLeadConv)
 
     const { data: conversations = [], isLoading } = useConversations(enterpriseId, search || undefined)
     const { data: connections = [] } = useConnections(enterpriseId)
 
     useChatSocket(enterpriseId)
 
-    // Filtros locais
-    const filtered = conversations.filter(c => {
-        if (tab === 'unread' && c.unreadCount === 0) return false
-        if (tab === 'waiting' && c.lastMessage.direction !== 'INBOUND') return false
-        if (filterUnread && c.unreadCount === 0) return false
-        if (selectedConnections.length > 0 && !selectedConnections.includes(c.connectionId)) return false
-        return true
-    })
+    // ── Filtros locais ──────────────────────────────────────────────────────
+
+    const filtered = conversations
+        .filter(c => {
+            if (tab === 'unread' && c.unreadCount === 0) return false
+            if (tab === 'waiting' && c.lastMessage.direction !== 'INBOUND') return false
+            if (filterUnread && c.unreadCount === 0) return false
+            if (filterWaiting && c.lastMessage.direction !== 'INBOUND') return false
+            if (filterConnectedOnly && c.connection.status !== 'CONNECTED') return false
+            if (selectedConnections.length > 0 && !selectedConnections.includes(c.connectionId)) return false
+            if (filterPeriod !== 'all') {
+                const cutoff = filterPeriod === 'today' ? startOfDay(new Date())
+                    : filterPeriod === '7d' ? subDays(new Date(), 7)
+                        : subDays(new Date(), 30)
+                if (new Date(c.lastMessage.sentAt) < cutoff) return false
+            }
+            return true
+        })
+        .sort((a, b) => {
+            if (sortOrder === 'unread_first') {
+                if (b.unreadCount !== a.unreadCount) return b.unreadCount - a.unreadCount
+            }
+            if (sortOrder === 'oldest') {
+                return new Date(a.lastMessage.sentAt).getTime() - new Date(b.lastMessage.sentAt).getTime()
+            }
+            return new Date(b.lastMessage.sentAt).getTime() - new Date(a.lastMessage.sentAt).getTime()
+        })
+
+    // ── Helpers ─────────────────────────────────────────────────────────────
+
+    function convKey(conv: Conversation) {
+        return `${conv.connectionId}:${conv.leadId}`
+    }
 
     function toggleConnection(id: string) {
         setSelectedConnections(prev =>
@@ -665,9 +915,69 @@ export default function ChatPage() {
         )
     }
 
+    function toggleSelect(conv: Conversation) {
+        const key = convKey(conv)
+        setSelected(prev => {
+            const next = new Set(prev)
+            if (next.has(key)) next.delete(key)
+            else next.add(key)
+            return next
+        })
+    }
+
+    // Marca como lido otimisticamente no cache
+    // Usa setQueriesData com prefixo para cobrir qualquer variante da query (com/sem q)
+    function markRead(convs: Conversation[]) {
+        queryClient.setQueriesData<Conversation[]>(
+            { queryKey: keys.chat.messages('all', enterpriseId) },
+            (old = []) => old.map(c =>
+                convs.some(x => convKey(x) === convKey(c))
+                    ? { ...c, unreadCount: 0, lastMessage: { ...c.lastMessage, isRead: true } }
+                    : c,
+            ),
+        )
+    }
+
+    function markUnread(convs: Conversation[]) {
+        queryClient.setQueriesData<Conversation[]>(
+            { queryKey: keys.chat.messages('all', enterpriseId) },
+            (old = []) => old.map(c =>
+                convs.some(x => convKey(x) === convKey(c))
+                    ? { ...c, unreadCount: 1, lastMessage: { ...c.lastMessage, isRead: false } }
+                    : c,
+            ),
+        )
+    }
+
+    function handleMarkSelectedRead() {
+        const convs = filtered.filter(c => selected.has(convKey(c)))
+        markRead(convs)
+        setSelected(new Set())
+    }
+
+    function handleMarkSelectedUnread() {
+        const convs = filtered.filter(c => selected.has(convKey(c)))
+        markUnread(convs)
+        setSelected(new Set())
+    }
+
+    function clearFilters() {
+        setSelectedConnections([])
+        setFilterUnread(false)
+        setFilterWaiting(false)
+        setFilterConnectedOnly(false)
+        setFilterPeriod('all')
+        setSortOrder('recent')
+    }
+
     const totalUnread = conversations.reduce((acc, c) => acc + c.unreadCount, 0)
     const waitingCount = conversations.filter(c => c.lastMessage.direction === 'INBOUND' && c.unreadCount > 0).length
-    const activeFilters = selectedConnections.length + (filterUnread ? 1 : 0)
+    const activeFilters = selectedConnections.length
+        + (filterUnread ? 1 : 0)
+        + (filterWaiting ? 1 : 0)
+        + (filterConnectedOnly ? 1 : 0)
+        + (filterPeriod !== 'all' ? 1 : 0)
+        + (sortOrder !== 'recent' ? 1 : 0)
 
     return (
         <div className="flex h-full overflow-hidden">
@@ -738,6 +1048,44 @@ export default function ChatPage() {
                     ))}
                 </div>
 
+                {/* Toolbar de seleção em massa */}
+                {selectionMode && (
+                    <div className="flex items-center gap-1.5 px-3 py-2 bg-primary/5 border-b shrink-0">
+                        <span className="flex-1 text-xs font-medium text-primary">
+                            {selected.size} {selected.size === 1 ? 'selecionado' : 'selecionados'}
+                        </span>
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 px-2 text-xs gap-1"
+                            onClick={handleMarkSelectedRead}
+                            title="Marcar como lido"
+                        >
+                            <Eye className="size-3.5" />
+                            Lido
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 px-2 text-xs gap-1"
+                            onClick={handleMarkSelectedUnread}
+                            title="Marcar como não lido"
+                        >
+                            <EyeOff className="size-3.5" />
+                            Não lido
+                        </Button>
+                        <Button
+                            size="icon"
+                            variant="ghost"
+                            className="size-7"
+                            onClick={() => setSelected(new Set())}
+                            title="Cancelar seleção"
+                        >
+                            <X className="size-3.5" />
+                        </Button>
+                    </div>
+                )}
+
                 {/* Conversation list */}
                 <div className="flex-1 overflow-y-auto">
                     {isLoading ? (
@@ -757,13 +1105,22 @@ export default function ChatPage() {
                     ) : (
                         filtered.map(conv => (
                             <ConversationItem
-                                key={`${conv.connectionId}:${conv.leadId}`}
+                                key={convKey(conv)}
                                 conv={conv}
                                 isActive={
                                     selectedConv?.connectionId === conv.connectionId &&
                                     selectedConv?.leadId === conv.leadId
                                 }
-                                onClick={() => setSelectedConv(conv)}
+                                onClick={() => {
+                                    if (selectionMode) { toggleSelect(conv); return }
+                                    setSelectedConv(conv)
+                                }}
+                                isSelected={selected.has(convKey(conv))}
+                                onSelect={() => toggleSelect(conv)}
+                                selectionMode={selectionMode}
+                                onOpenLead={() => setCtxLeadConv(conv)}
+                                onMarkRead={() => markRead([conv])}
+                                onMarkUnread={() => markUnread([conv])}
                             />
                         ))
                     )}
@@ -785,8 +1142,27 @@ export default function ChatPage() {
                 connections={connections}
                 selectedConnections={selectedConnections}
                 onConnectionChange={toggleConnection}
+                filterConnectedOnly={filterConnectedOnly}
+                onFilterConnectedOnlyChange={setFilterConnectedOnly}
                 filterUnread={filterUnread}
                 onFilterUnreadChange={setFilterUnread}
+                filterWaiting={filterWaiting}
+                onFilterWaitingChange={setFilterWaiting}
+                filterPeriod={filterPeriod}
+                onFilterPeriodChange={setFilterPeriod}
+                sortOrder={sortOrder}
+                onSortOrderChange={setSortOrder}
+                onClear={clearFilters}
+                activeFilters={activeFilters}
+            />
+
+            {/* Lead sheet aberto via context menu */}
+            <LeadSheet
+                lead={ctxLead ?? null}
+                enterpriseId={enterpriseId}
+                open={!!ctxLeadConv}
+                onOpenChange={open => { if (!open) setCtxLeadConv(null) }}
+                onEdit={() => setCtxLeadConv(null)}
             />
         </div>
     )

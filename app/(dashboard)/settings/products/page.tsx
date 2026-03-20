@@ -467,17 +467,52 @@ function MediaGallery({
 type FormState = {
     name: string
     description: string
+    // Preços
     price: string
+    priceMin: string
+    pricePromo: string
+    promoLabel: string
+    // Parcelamento
+    maxInstallments: string
+    installmentsNote: string
+    // Identificação
     sku: string
     category: string
+    unit: string
+    // Estoque e Logística
+    stock: string
+    warranty: string
+    deliveryInfo: string
+    externalUrl: string
+    // IA
+    salesPitch: string
+    commonObjections: string
+    // Misc
     tags: string[]
     colors: string[]
     status: string
 }
 
 const EMPTY_FORM: FormState = {
-    name: '', description: '', price: '', sku: '',
-    category: '', tags: [], colors: [], status: 'active',
+    name: '', description: '',
+    price: '', priceMin: '', pricePromo: '', promoLabel: '',
+    maxInstallments: '', installmentsNote: '',
+    sku: '', category: '', unit: '',
+    stock: '', warranty: '', deliveryInfo: '', externalUrl: '',
+    salesPitch: '', commonObjections: '',
+    tags: [], colors: [], status: 'active',
+}
+
+function parseNum(v: string): number | null {
+    if (!v.trim()) return null
+    const n = parseFloat(v.replace(',', '.'))
+    return isNaN(n) ? null : n
+}
+
+function parseIntField(v: string): number | null {
+    if (!v.trim()) return null
+    const n = parseInt(v, 10)
+    return isNaN(n) ? null : n
 }
 
 function productToForm(p: Product): FormState {
@@ -485,8 +520,20 @@ function productToForm(p: Product): FormState {
         name: p.name,
         description: p.description ?? '',
         price: p.price > 0 ? String(p.price) : '',
+        priceMin: p.priceMin != null ? String(p.priceMin) : '',
+        pricePromo: p.pricePromo != null ? String(p.pricePromo) : '',
+        promoLabel: p.promoLabel ?? '',
+        maxInstallments: p.maxInstallments != null ? String(p.maxInstallments) : '',
+        installmentsNote: p.installmentsNote ?? '',
         sku: p.sku ?? '',
         category: p.category ?? '',
+        unit: p.unit ?? '',
+        stock: p.stock != null ? String(p.stock) : '',
+        warranty: p.warranty ?? '',
+        deliveryInfo: p.deliveryInfo ?? '',
+        externalUrl: p.externalUrl ?? '',
+        salesPitch: p.salesPitch ?? '',
+        commonObjections: p.commonObjections ?? '',
         tags: p.tags,
         colors: p.colors,
         status: p.status,
@@ -536,9 +583,21 @@ function ProductSheet({
         const payload = {
             name: form.name.trim(),
             description: form.description.trim() || null,
-            price: form.price ? parseFloat(form.price.replace(',', '.')) : 0,
+            price: parseNum(form.price) ?? 0,
+            priceMin: parseNum(form.priceMin),
+            pricePromo: parseNum(form.pricePromo),
+            promoLabel: form.promoLabel.trim() || null,
+            maxInstallments: parseIntField(form.maxInstallments),
+            installmentsNote: form.installmentsNote.trim() || null,
             sku: form.sku.trim() || null,
             category: form.category.trim() || null,
+            unit: form.unit.trim() || null,
+            stock: parseIntField(form.stock),
+            warranty: form.warranty.trim() || null,
+            deliveryInfo: form.deliveryInfo.trim() || null,
+            externalUrl: form.externalUrl.trim() || null,
+            salesPitch: form.salesPitch.trim() || null,
+            commonObjections: form.commonObjections.trim() || null,
             tags: form.tags,
             colors: form.colors,
             status: form.status,
@@ -574,103 +633,270 @@ function ProductSheet({
                 </SheetHeader>
 
                 <div className="flex-1 overflow-y-auto">
-                    <form id="product-form" onSubmit={handleSubmit} className="flex flex-col gap-5 p-6">
+                    <form id="product-form" onSubmit={handleSubmit} className="flex flex-col gap-6 p-6">
 
-                        {/* Nome */}
-                        <div className="flex flex-col gap-1.5">
-                            <Label htmlFor="p-name">Nome do produto *</Label>
-                            <Input
-                                id="p-name"
-                                placeholder="Ex: Sofá 3 lugares"
-                                value={form.name}
-                                onChange={e => set('name', e.target.value)}
-                                disabled={isPending}
+                        {/* ── Informações básicas ── */}
+                        <div className="flex flex-col gap-4">
+                            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Informações básicas</h3>
+
+                            <div className="flex flex-col gap-1.5">
+                                <Label htmlFor="p-name">Nome do produto *</Label>
+                                <Input
+                                    id="p-name"
+                                    placeholder="Ex: Sofá 3 lugares"
+                                    value={form.name}
+                                    onChange={e => set('name', e.target.value)}
+                                    disabled={isPending}
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="flex flex-col gap-1.5">
+                                    <Label htmlFor="p-sku">SKU / Identificador</Label>
+                                    <Input
+                                        id="p-sku"
+                                        placeholder="Ex: SOF-001"
+                                        value={form.sku}
+                                        onChange={e => set('sku', e.target.value)}
+                                        disabled={isPending}
+                                    />
+                                </div>
+                                <div className="flex flex-col gap-1.5">
+                                    <Label htmlFor="p-cat">Categoria</Label>
+                                    <Input
+                                        id="p-cat"
+                                        placeholder="Ex: Sofás, Eletrônicos..."
+                                        value={form.category}
+                                        onChange={e => set('category', e.target.value)}
+                                        disabled={isPending}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="flex flex-col gap-1.5">
+                                    <Label htmlFor="p-unit">Unidade</Label>
+                                    <Input
+                                        id="p-unit"
+                                        placeholder="Ex: un, cx, kg, m²"
+                                        value={form.unit}
+                                        onChange={e => set('unit', e.target.value)}
+                                        disabled={isPending}
+                                    />
+                                </div>
+                                <div className="flex flex-col gap-1.5">
+                                    <Label>Status</Label>
+                                    <Select value={form.status} onValueChange={v => set('status', v)} disabled={isPending}>
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="active">Ativo</SelectItem>
+                                            <SelectItem value="inactive">Inativo</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                                <Label htmlFor="p-desc">Descrição</Label>
+                                <Textarea
+                                    id="p-desc"
+                                    placeholder="Descreva o produto, materiais, dimensões, diferenciais..."
+                                    value={form.description}
+                                    onChange={e => set('description', e.target.value)}
+                                    disabled={isPending}
+                                    rows={3}
+                                    className="resize-none"
+                                />
+                            </div>
+                        </div>
+
+                        {/* ── Preços e Parcelamento ── */}
+                        <div className="flex flex-col gap-4">
+                            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Preços e Parcelamento</h3>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="flex flex-col gap-1.5">
+                                    <Label htmlFor="p-price">Preço (R$)</Label>
+                                    <Input
+                                        id="p-price"
+                                        placeholder="0,00"
+                                        value={form.price}
+                                        onChange={e => set('price', e.target.value.replace(/[^\d,.]/, ''))}
+                                        disabled={isPending}
+                                        inputMode="decimal"
+                                    />
+                                </div>
+                                <div className="flex flex-col gap-1.5">
+                                    <Label htmlFor="p-priceMin">Preço mínimo (R$)</Label>
+                                    <Input
+                                        id="p-priceMin"
+                                        placeholder="Negociação mínima"
+                                        value={form.priceMin}
+                                        onChange={e => set('priceMin', e.target.value.replace(/[^\d,.]/, ''))}
+                                        disabled={isPending}
+                                        inputMode="decimal"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="flex flex-col gap-1.5">
+                                    <Label htmlFor="p-pricePromo">Preço promocional (R$)</Label>
+                                    <Input
+                                        id="p-pricePromo"
+                                        placeholder="0,00"
+                                        value={form.pricePromo}
+                                        onChange={e => set('pricePromo', e.target.value.replace(/[^\d,.]/, ''))}
+                                        disabled={isPending}
+                                        inputMode="decimal"
+                                    />
+                                </div>
+                                <div className="flex flex-col gap-1.5">
+                                    <Label htmlFor="p-promoLabel">Label da promoção</Label>
+                                    <Input
+                                        id="p-promoLabel"
+                                        placeholder="Ex: Black Friday, Oferta"
+                                        value={form.promoLabel}
+                                        onChange={e => set('promoLabel', e.target.value)}
+                                        disabled={isPending}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="flex flex-col gap-1.5">
+                                    <Label htmlFor="p-maxInst">Máx. parcelas</Label>
+                                    <Input
+                                        id="p-maxInst"
+                                        placeholder="Ex: 12"
+                                        value={form.maxInstallments}
+                                        onChange={e => set('maxInstallments', e.target.value.replace(/\D/, ''))}
+                                        disabled={isPending}
+                                        inputMode="numeric"
+                                    />
+                                </div>
+                                <div className="flex flex-col gap-1.5">
+                                    <Label htmlFor="p-instNote">Condição de parcelamento</Label>
+                                    <Input
+                                        id="p-instNote"
+                                        placeholder="Ex: Sem juros no cartão"
+                                        value={form.installmentsNote}
+                                        onChange={e => set('installmentsNote', e.target.value)}
+                                        disabled={isPending}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* ── Logística e Estoque ── */}
+                        <div className="flex flex-col gap-4">
+                            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Logística e Estoque</h3>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="flex flex-col gap-1.5">
+                                    <Label htmlFor="p-stock">Estoque disponível</Label>
+                                    <Input
+                                        id="p-stock"
+                                        placeholder="Qtd em estoque"
+                                        value={form.stock}
+                                        onChange={e => set('stock', e.target.value.replace(/\D/, ''))}
+                                        disabled={isPending}
+                                        inputMode="numeric"
+                                    />
+                                </div>
+                                <div className="flex flex-col gap-1.5">
+                                    <Label htmlFor="p-warranty">Garantia</Label>
+                                    <Input
+                                        id="p-warranty"
+                                        placeholder="Ex: 12 meses, 1 ano"
+                                        value={form.warranty}
+                                        onChange={e => set('warranty', e.target.value)}
+                                        disabled={isPending}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                                <Label htmlFor="p-delivery">Informações de entrega</Label>
+                                <Input
+                                    id="p-delivery"
+                                    placeholder="Ex: Frete grátis para SP, entrega em 3-5 dias"
+                                    value={form.deliveryInfo}
+                                    onChange={e => set('deliveryInfo', e.target.value)}
+                                    disabled={isPending}
+                                />
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                                <Label htmlFor="p-url">Link externo</Label>
+                                <Input
+                                    id="p-url"
+                                    placeholder="https://seusite.com.br/produto"
+                                    value={form.externalUrl}
+                                    onChange={e => set('externalUrl', e.target.value)}
+                                    disabled={isPending}
+                                    type="url"
+                                />
+                            </div>
+                        </div>
+
+                        {/* ── Contexto para a IA ── */}
+                        <div className="flex flex-col gap-4">
+                            <div>
+                                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Contexto para a IA</h3>
+                                <p className="text-xs text-muted-foreground mt-0.5">Essas informações serão usadas pelo agente de IA para apresentar e vender o produto com mais eficiência.</p>
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                                <Label htmlFor="p-pitch">Argumento de venda (Pitch)</Label>
+                                <Textarea
+                                    id="p-pitch"
+                                    placeholder="Como apresentar este produto? Quais são os principais benefícios e diferenciais que a IA deve destacar?"
+                                    value={form.salesPitch}
+                                    onChange={e => set('salesPitch', e.target.value)}
+                                    disabled={isPending}
+                                    rows={3}
+                                    className="resize-none"
+                                />
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                                <Label htmlFor="p-objections">Objeções comuns e respostas</Label>
+                                <Textarea
+                                    id="p-objections"
+                                    placeholder="Ex: 'É caro?' → Responder que o produto tem garantia estendida e parcelamento sem juros..."
+                                    value={form.commonObjections}
+                                    onChange={e => set('commonObjections', e.target.value)}
+                                    disabled={isPending}
+                                    rows={3}
+                                    className="resize-none"
+                                />
+                            </div>
+                        </div>
+
+                        {/* ── Tags e Cores ── */}
+                        <div className="flex flex-col gap-4">
+                            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Tags e Cores</h3>
+
+                            <TagChipInput
+                                label="Tags"
+                                placeholder="Ex: promoção, destaque..."
+                                values={form.tags}
+                                onChange={v => set('tags', v)}
+                            />
+
+                            <TagChipInput
+                                label="Cores disponíveis"
+                                placeholder="#FF5733 ou vermelho"
+                                values={form.colors}
+                                onChange={v => set('colors', v)}
+                                colorMode
                             />
                         </div>
 
-                        {/* SKU */}
-                        <div className="flex flex-col gap-1.5">
-                            <Label htmlFor="p-sku">SKU / Identificador</Label>
-                            <Input
-                                id="p-sku"
-                                placeholder="Ex: SOF-001"
-                                value={form.sku}
-                                onChange={e => set('sku', e.target.value)}
-                                disabled={isPending}
-                            />
-                        </div>
-
-                        {/* Preço */}
-                        <div className="flex flex-col gap-1.5">
-                            <Label htmlFor="p-price">Preço (R$)</Label>
-                            <Input
-                                id="p-price"
-                                placeholder="0,00"
-                                value={form.price}
-                                onChange={e => set('price', e.target.value.replace(/[^\d,.]/, ''))}
-                                disabled={isPending}
-                                inputMode="decimal"
-                            />
-                        </div>
-
-                        {/* Status */}
-                        <div className="flex flex-col gap-1.5">
-                            <Label>Status</Label>
-                            <Select value={form.status} onValueChange={v => set('status', v)} disabled={isPending}>
-                                <SelectTrigger>
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="active">Ativo</SelectItem>
-                                    <SelectItem value="inactive">Inativo</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        {/* Categoria */}
-                        <div className="flex flex-col gap-1.5">
-                            <Label htmlFor="p-cat">Categoria</Label>
-                            <Input
-                                id="p-cat"
-                                placeholder="Ex: Sofás, Camisetas, Eletrônicos..."
-                                value={form.category}
-                                onChange={e => set('category', e.target.value)}
-                                disabled={isPending}
-                            />
-                        </div>
-
-                        {/* Descrição */}
-                        <div className="flex flex-col gap-1.5">
-                            <Label htmlFor="p-desc">Descrição</Label>
-                            <Textarea
-                                id="p-desc"
-                                placeholder="Descreva o produto, materiais, dimensões, diferenciais..."
-                                value={form.description}
-                                onChange={e => set('description', e.target.value)}
-                                disabled={isPending}
-                                rows={4}
-                                className="resize-none"
-                            />
-                        </div>
-
-                        {/* Tags */}
-                        <TagChipInput
-                            label="Tags"
-                            placeholder="Ex: promoção, destaque..."
-                            values={form.tags}
-                            onChange={v => set('tags', v)}
-                        />
-
-                        {/* Cores */}
-                        <TagChipInput
-                            label="Cores disponíveis"
-                            placeholder="#FF5733 ou vermelho"
-                            values={form.colors}
-                            onChange={v => set('colors', v)}
-                            colorMode
-                        />
-
-                        {/* Galeria (só em edição, pois precisa do ID para upload) */}
+                        {/* ── Galeria de mídia ── */}
                         {isEdit && product && (
                             <MediaGallery product={product} enterpriseId={enterpriseId} />
                         )}

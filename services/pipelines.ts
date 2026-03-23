@@ -416,3 +416,75 @@ export function useDeleteStage() {
         },
     })
 }
+
+// ─── Types — Follow-up Config ─────────────────────────────────────────────────
+
+export type FollowUpActionType = 'SEND_MESSAGE' | 'MOVE_STAGE' | 'ASSIGN' | 'WEBHOOK' | 'CREATE_TASK'
+
+export type FollowUpAction = {
+    type: FollowUpActionType
+    config: Record<string, unknown>
+}
+
+export type StageFollowUpConfig = {
+    id: string
+    stageId: string
+    isActive: boolean
+    triggerAfterMinutes: number
+    maxAttempts: number
+    repeatIntervalMinutes: number | null
+    actions: FollowUpAction[]
+    createdAt: string
+}
+
+// ─── API — Follow-up Config ───────────────────────────────────────────────────
+
+async function getStageFollowUpConfigFn(stageId: string, enterpriseId: string): Promise<StageFollowUpConfig | null> {
+    const { data, status } = await api.get<StageFollowUpConfig>(
+        `/pipelines/stages/${stageId}/follow-up-config`,
+        { headers: { 'X-Enterprise-Id': enterpriseId }, validateStatus: (s) => s < 500 },
+    )
+    if (status === 204) return null
+    return data
+}
+
+async function upsertStageFollowUpConfigFn({
+    stageId,
+    enterpriseId,
+    ...body
+}: {
+    stageId: string
+    enterpriseId: string
+    isActive: boolean
+    triggerAfterMinutes: number
+    maxAttempts: number
+    repeatIntervalMinutes?: number | null
+    actions: FollowUpAction[]
+}): Promise<StageFollowUpConfig> {
+    const { data } = await api.put<StageFollowUpConfig>(
+        `/pipelines/stages/${stageId}/follow-up-config`,
+        body,
+        { headers: { 'X-Enterprise-Id': enterpriseId } },
+    )
+    return data
+}
+
+// ─── Hooks — Follow-up Config ─────────────────────────────────────────────────
+
+export function useGetStageFollowUpConfig(stageId: string, enterpriseId: string) {
+    return useQuery({
+        queryKey: ['pipelines', 'stages', stageId, 'follow-up-config'],
+        queryFn: () => getStageFollowUpConfigFn(stageId, enterpriseId),
+        enabled: !!stageId && !!enterpriseId,
+    })
+}
+
+export function useUpsertStageFollowUpConfig() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: upsertStageFollowUpConfigFn,
+        onSuccess: (_data, { stageId }) => {
+            qc.invalidateQueries({ queryKey: ['pipelines', 'stages', stageId, 'follow-up-config'] })
+        },
+    })
+}

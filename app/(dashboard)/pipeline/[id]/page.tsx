@@ -23,7 +23,8 @@ import {
     Loader2, Banknote, CalendarDays, Tag as TagIcon,
     MessageCircle, ChevronDown, Trash2, ArrowLeft, UserPlus,
     Pencil, Trophy, XCircle, User, Send, X, Check, WifiOff,
-    Package, Minus,
+    Package, Minus, LayoutGrid, Clock, Settings2, Trash,
+    AlertCircle,
 } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
@@ -36,10 +37,16 @@ import {
     DropdownMenu, DropdownMenuContent, DropdownMenuItem,
     DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { Switch } from '@/components/ui/switch'
+import { Textarea } from '@/components/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 import { useEnterprise } from '@/hooks/use-enterprise'
 import { usePipelineSocket } from '@/hooks/use-pipeline-socket'
-import { useGetPipeline, type PipelineStage } from '@/services/pipelines'
+import {
+    useGetPipeline, useGetStageFollowUpConfig, useUpsertStageFollowUpConfig,
+    type PipelineStage, type StageFollowUpConfig, type FollowUpAction, type FollowUpActionType,
+} from '@/services/pipelines'
 import {
     useStageDeals, useCreateDeal, useUpdateDeal, useDeleteDeal,
     useListDealProducts, useAddDealProduct, useUpdateDealProduct, useRemoveDealProduct,
@@ -1395,6 +1402,474 @@ function KanbanColumn({
     )
 }
 
+// ─── Follow-up Components ─────────────────────────────────────────────────────
+
+const ACTION_LABELS: Record<FollowUpActionType, string> = {
+    SEND_MESSAGE: 'Enviar mensagem',
+    MOVE_STAGE: 'Mover de estágio',
+    ASSIGN: 'Atribuir responsável',
+    WEBHOOK: 'Disparar webhook',
+    CREATE_TASK: 'Criar tarefa',
+}
+
+function minutesToParts(minutes: number): { days: number; hours: number; mins: number } {
+    const days = Math.floor(minutes / 1440)
+    const hours = Math.floor((minutes % 1440) / 60)
+    const mins = minutes % 60
+    return { days, hours, mins }
+}
+
+function partsToMinutes(days: number, hours: number, mins: number): number {
+    return days * 1440 + hours * 60 + mins
+}
+
+function TimeInputSelector({
+    value,
+    onChange,
+    label,
+}: {
+    value: number
+    onChange: (mins: number) => void
+    label: string
+}) {
+    const { days, hours, mins } = minutesToParts(value)
+    return (
+        <div className="space-y-1">
+            <Label className="text-xs">{label}</Label>
+            <div className="flex items-center gap-2">
+                <div className="flex flex-col items-center gap-0.5">
+                    <Input
+                        type="number" min={0}
+                        className="w-16 h-8 text-center text-xs"
+                        value={days}
+                        onChange={(e) => onChange(partsToMinutes(Math.max(0, Number(e.target.value)), hours, mins))}
+                    />
+                    <span className="text-[10px] text-muted-foreground">dias</span>
+                </div>
+                <span className="text-muted-foreground text-sm pb-3">:</span>
+                <div className="flex flex-col items-center gap-0.5">
+                    <Input
+                        type="number" min={0} max={23}
+                        className="w-16 h-8 text-center text-xs"
+                        value={hours}
+                        onChange={(e) => onChange(partsToMinutes(days, Math.min(23, Math.max(0, Number(e.target.value))), mins))}
+                    />
+                    <span className="text-[10px] text-muted-foreground">horas</span>
+                </div>
+                <span className="text-muted-foreground text-sm pb-3">:</span>
+                <div className="flex flex-col items-center gap-0.5">
+                    <Input
+                        type="number" min={0} max={59}
+                        className="w-16 h-8 text-center text-xs"
+                        value={mins}
+                        onChange={(e) => onChange(partsToMinutes(days, hours, Math.min(59, Math.max(0, Number(e.target.value)))))}
+                    />
+                    <span className="text-[10px] text-muted-foreground">min</span>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+function ActionEditor({
+    action,
+    stages,
+    members,
+    onChange,
+    onRemove,
+}: {
+    action: FollowUpAction
+    stages: PipelineStage[]
+    members: Array<{ id: string; user: { id: string; name: string } }>
+    onChange: (a: FollowUpAction) => void
+    onRemove: () => void
+}) {
+    return (
+        <div className="border rounded-lg p-3 space-y-2 bg-muted/20">
+            <div className="flex items-center justify-between gap-2">
+                <Select
+                    value={action.type}
+                    onValueChange={(v) => onChange({ type: v as FollowUpActionType, config: {} })}
+                >
+                    <SelectTrigger className="h-8 text-xs flex-1">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {(Object.keys(ACTION_LABELS) as FollowUpActionType[]).map((t) => (
+                            <SelectItem key={t} value={t} className="text-xs">{ACTION_LABELS[t]}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                <button onClick={onRemove} className="p-1 hover:bg-destructive/10 rounded text-muted-foreground hover:text-destructive transition-colors">
+                    <Trash className="size-3.5" />
+                </button>
+            </div>
+
+            {action.type === 'SEND_MESSAGE' && (
+                <Textarea
+                    placeholder="Mensagem a enviar..."
+                    className="text-xs min-h-[72px] resize-none"
+                    value={(action.config.message as string) ?? ''}
+                    onChange={(e) => onChange({ ...action, config: { ...action.config, message: e.target.value } })}
+                />
+            )}
+
+            {action.type === 'MOVE_STAGE' && (
+                <Select
+                    value={(action.config.stageId as string) ?? ''}
+                    onValueChange={(v) => onChange({ ...action, config: { ...action.config, stageId: v } })}
+                >
+                    <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder="Selecionar estágio..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {stages.map((s) => (
+                            <SelectItem key={s.id} value={s.id} className="text-xs">{s.name}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            )}
+
+            {action.type === 'ASSIGN' && (
+                <Select
+                    value={(action.config.userId as string) ?? ''}
+                    onValueChange={(v) => onChange({ ...action, config: { ...action.config, userId: v } })}
+                >
+                    <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder="Selecionar responsável..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {members.map((m) => (
+                            <SelectItem key={m.user.id} value={m.user.id} className="text-xs">{m.user.name}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            )}
+
+            {action.type === 'WEBHOOK' && (
+                <Input
+                    placeholder="https://..."
+                    className="h-8 text-xs"
+                    value={(action.config.url as string) ?? ''}
+                    onChange={(e) => onChange({ ...action, config: { ...action.config, url: e.target.value } })}
+                />
+            )}
+
+            {action.type === 'CREATE_TASK' && (
+                <Input
+                    placeholder="Título da tarefa..."
+                    className="h-8 text-xs"
+                    value={(action.config.title as string) ?? ''}
+                    onChange={(e) => onChange({ ...action, config: { ...action.config, title: e.target.value } })}
+                />
+            )}
+        </div>
+    )
+}
+
+function FollowUpConfigModal({
+    stage,
+    enterpriseId,
+    stages,
+    open,
+    onClose,
+}: {
+    stage: PipelineStage
+    enterpriseId: string
+    stages: PipelineStage[]
+    open: boolean
+    onClose: () => void
+}) {
+    const { data: config, isLoading } = useGetStageFollowUpConfig(stage.id, enterpriseId)
+    const upsert = useUpsertStageFollowUpConfig()
+    const { data: membersData } = useMembers(enterpriseId)
+    const members = membersData ?? []
+
+    const [isActive, setIsActive] = useState(false)
+    const [triggerAfterMinutes, setTriggerAfterMinutes] = useState(1440)
+    const [maxAttempts, setMaxAttempts] = useState(1)
+    const [hasRepeat, setHasRepeat] = useState(false)
+    const [repeatIntervalMinutes, setRepeatIntervalMinutes] = useState(1440)
+    const [actions, setActions] = useState<FollowUpAction[]>([])
+
+    useEffect(() => {
+        if (config) {
+            setIsActive(config.isActive)
+            setTriggerAfterMinutes(config.triggerAfterMinutes)
+            setMaxAttempts(config.maxAttempts)
+            setHasRepeat(config.repeatIntervalMinutes !== null)
+            setRepeatIntervalMinutes(config.repeatIntervalMinutes ?? 1440)
+            setActions(config.actions)
+        } else {
+            setIsActive(false)
+            setTriggerAfterMinutes(1440)
+            setMaxAttempts(1)
+            setHasRepeat(false)
+            setRepeatIntervalMinutes(1440)
+            setActions([])
+        }
+    }, [config])
+
+    function handleAddAction() {
+        setActions((prev) => [...prev, { type: 'SEND_MESSAGE', config: {} }])
+    }
+
+    function handleSave() {
+        upsert.mutate(
+            {
+                stageId: stage.id,
+                enterpriseId,
+                isActive,
+                triggerAfterMinutes,
+                maxAttempts,
+                repeatIntervalMinutes: hasRepeat ? repeatIntervalMinutes : null,
+                actions,
+            },
+            {
+                onSuccess: () => {
+                    toast.success('Configuração de follow-up salva!')
+                    onClose()
+                },
+                onError: () => toast.error('Erro ao salvar configuração.'),
+            },
+        )
+    }
+
+    return (
+        <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
+            <SheetContent className="w-full sm:max-w-md overflow-y-auto" side="right">
+                <SheetHeader className="mb-4">
+                    <SheetTitle className="flex items-center gap-2 text-sm">
+                        <span
+                            className="inline-block size-2.5 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: stage.color }}
+                        />
+                        Follow-up — {stage.name}
+                    </SheetTitle>
+                </SheetHeader>
+
+                {isLoading ? (
+                    <div className="flex items-center justify-center py-12">
+                        <Loader2 className="size-5 animate-spin text-muted-foreground" />
+                    </div>
+                ) : (
+                    <div className="space-y-5">
+                        {/* Ativar */}
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium">Ativar follow-up</p>
+                                <p className="text-xs text-muted-foreground">Executar automaticamente quando habilitado</p>
+                            </div>
+                            <Switch checked={isActive} onCheckedChange={setIsActive} />
+                        </div>
+
+                        <div className="border-t" />
+
+                        {/* Tempo de gatilho */}
+                        <TimeInputSelector
+                            label="Disparar após"
+                            value={triggerAfterMinutes}
+                            onChange={setTriggerAfterMinutes}
+                        />
+
+                        {/* Máximo de tentativas */}
+                        <div className="space-y-1">
+                            <Label className="text-xs">Máximo de tentativas</Label>
+                            <Input
+                                type="number" min={1} max={20}
+                                className="w-24 h-8 text-xs"
+                                value={maxAttempts}
+                                onChange={(e) => setMaxAttempts(Math.max(1, Number(e.target.value)))}
+                            />
+                        </div>
+
+                        {/* Repetição */}
+                        <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                                <Switch checked={hasRepeat} onCheckedChange={setHasRepeat} />
+                                <Label className="text-xs cursor-pointer" onClick={() => setHasRepeat(p => !p)}>
+                                    Repetir após cada tentativa
+                                </Label>
+                            </div>
+                            {hasRepeat && (
+                                <TimeInputSelector
+                                    label="Intervalo entre tentativas"
+                                    value={repeatIntervalMinutes}
+                                    onChange={setRepeatIntervalMinutes}
+                                />
+                            )}
+                        </div>
+
+                        <div className="border-t" />
+
+                        {/* Ações */}
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                                <Label className="text-xs font-medium">Ações</Label>
+                                <button
+                                    onClick={handleAddAction}
+                                    className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors"
+                                >
+                                    <Plus className="size-3.5" />
+                                    Adicionar ação
+                                </button>
+                            </div>
+                            {actions.length === 0 && (
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground py-3 border rounded-lg px-3 bg-muted/20">
+                                    <AlertCircle className="size-3.5 flex-shrink-0" />
+                                    Nenhuma ação configurada. Adicione pelo menos uma ação.
+                                </div>
+                            )}
+                            {actions.map((action, i) => (
+                                <ActionEditor
+                                    key={i}
+                                    action={action}
+                                    stages={stages.filter((s) => s.id !== stage.id)}
+                                    members={members}
+                                    onChange={(updated) => setActions((prev) => prev.map((a, idx) => idx === i ? updated : a))}
+                                    onRemove={() => setActions((prev) => prev.filter((_, idx) => idx !== i))}
+                                />
+                            ))}
+                        </div>
+
+                        <div className="border-t pt-3 flex gap-2">
+                            <Button
+                                className="flex-1"
+                                onClick={handleSave}
+                                disabled={upsert.isPending}
+                            >
+                                {upsert.isPending ? <Loader2 className="size-4 animate-spin mr-2" /> : null}
+                                Salvar
+                            </Button>
+                            <Button variant="outline" onClick={onClose}>Cancelar</Button>
+                        </div>
+                    </div>
+                )}
+            </SheetContent>
+        </Sheet>
+    )
+}
+
+function FollowUpStageCard({
+    stage,
+    enterpriseId,
+    stages,
+}: {
+    stage: PipelineStage
+    enterpriseId: string
+    stages: PipelineStage[]
+}) {
+    const [modalOpen, setModalOpen] = useState(false)
+    const { data: config } = useGetStageFollowUpConfig(stage.id, enterpriseId)
+
+    function formatDelay(minutes: number) {
+        const { days, hours, mins } = minutesToParts(minutes)
+        const parts = []
+        if (days > 0) parts.push(`${days}d`)
+        if (hours > 0) parts.push(`${hours}h`)
+        if (mins > 0) parts.push(`${mins}min`)
+        return parts.join(' ') || '0min'
+    }
+
+    return (
+        <>
+            <div className="border rounded-xl p-4 bg-card hover:shadow-sm transition-shadow space-y-3">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <span
+                            className="inline-block size-2.5 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: stage.color }}
+                        />
+                        <span className="font-medium text-sm">{stage.name}</span>
+                    </div>
+                    {config ? (
+                        <span className={cn(
+                            'text-[10px] font-medium px-2 py-0.5 rounded-full',
+                            config.isActive
+                                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                                : 'bg-muted text-muted-foreground',
+                        )}>
+                            {config.isActive ? 'Ativo' : 'Inativo'}
+                        </span>
+                    ) : (
+                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                            Não configurado
+                        </span>
+                    )}
+                </div>
+
+                {config ? (
+                    <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
+                        <div className="flex flex-col gap-0.5">
+                            <span className="text-[10px] uppercase tracking-wide font-medium">Dispara após</span>
+                            <span className="font-medium text-foreground">{formatDelay(config.triggerAfterMinutes)}</span>
+                        </div>
+                        <div className="flex flex-col gap-0.5">
+                            <span className="text-[10px] uppercase tracking-wide font-medium">Ações</span>
+                            <span className="font-medium text-foreground">{config.actions.length}</span>
+                        </div>
+                        <div className="flex flex-col gap-0.5">
+                            <span className="text-[10px] uppercase tracking-wide font-medium">Tentativas</span>
+                            <span className="font-medium text-foreground">{config.maxAttempts}x</span>
+                        </div>
+                    </div>
+                ) : (
+                    <p className="text-xs text-muted-foreground">
+                        Clique em configurar para definir ações automáticas para este estágio.
+                    </p>
+                )}
+
+                <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full h-7 text-xs gap-1.5"
+                    onClick={() => setModalOpen(true)}
+                >
+                    <Settings2 className="size-3.5" />
+                    Configurar
+                </Button>
+            </div>
+
+            <FollowUpConfigModal
+                stage={stage}
+                enterpriseId={enterpriseId}
+                stages={stages}
+                open={modalOpen}
+                onClose={() => setModalOpen(false)}
+            />
+        </>
+    )
+}
+
+function FollowUpView({
+    stages,
+    enterpriseId,
+}: {
+    stages: PipelineStage[]
+    enterpriseId: string
+}) {
+    return (
+        <div className="flex-1 overflow-y-auto p-5">
+            <div className="max-w-4xl mx-auto space-y-4">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                    <Clock className="size-4" />
+                    <span>Configure automações por tempo para cada estágio do funil.</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {stages.map((stage) => (
+                        <FollowUpStageCard
+                            key={stage.id}
+                            stage={stage}
+                            enterpriseId={enterpriseId}
+                            stages={stages}
+                        />
+                    ))}
+                </div>
+            </div>
+        </div>
+    )
+}
+
 // ─── Página principal ─────────────────────────────────────────────────────────
 
 export default function PipelinePage() {
@@ -1409,6 +1884,7 @@ export default function PipelinePage() {
     // Tempo real: recebe eventos de outros usuários na mesma pipeline
     usePipelineSocket(id, enterpriseId)
 
+    const [view, setView] = useState<'pipeline' | 'followup'>('pipeline')
     const [sort, setSort] = useState<Sort>('recent')
     const [activeTab, setActiveTab] = useState<Tab>('recent')
     const [activeDeal, setActiveDeal] = useState<Deal | null>(null)
@@ -1521,6 +1997,32 @@ export default function PipelinePage() {
                             </button>
                         ))}
                     </div>
+                    <div className="flex items-center gap-0.5 bg-muted/40 rounded-lg border p-0.5">
+                        <button
+                            onClick={() => setView('pipeline')}
+                            className={cn(
+                                'flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-colors',
+                                view === 'pipeline'
+                                    ? 'bg-background text-foreground shadow-sm'
+                                    : 'text-muted-foreground hover:text-foreground',
+                            )}
+                        >
+                            <LayoutGrid className="size-3.5" />
+                            Pipeline
+                        </button>
+                        <button
+                            onClick={() => setView('followup')}
+                            className={cn(
+                                'flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-colors',
+                                view === 'followup'
+                                    ? 'bg-background text-foreground shadow-sm'
+                                    : 'text-muted-foreground hover:text-foreground',
+                            )}
+                        >
+                            <Clock className="size-3.5" />
+                            Follow-up
+                        </button>
+                    </div>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -1561,8 +2063,13 @@ export default function PipelinePage() {
                 </div>
             </div>
 
+            {/* Follow-up View */}
+            {view === 'followup' && (
+                <FollowUpView stages={pipeline.stages} enterpriseId={enterpriseId} />
+            )}
+
             {/* Kanban Board */}
-            <DndContext
+            {view === 'pipeline' && <DndContext
                 sensors={sensors}
                 onDragStart={handleDragStart}
                 onDragEnd={handleDragEnd}
@@ -1598,7 +2105,7 @@ export default function PipelinePage() {
                         </div>
                     )}
                 </DragOverlay>
-            </DndContext>
+            </DndContext>}
 
             {/* Widget de chat WhatsApp */}
             {chatLead && (

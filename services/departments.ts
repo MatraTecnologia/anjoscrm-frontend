@@ -121,7 +121,7 @@ async function removeDepartmentMemberFn(payload: {
 
 export function useListDepartments(enterpriseId: string, search?: string) {
     return useQuery({
-        queryKey: [...(keys.departments?.all?.(enterpriseId) ?? ['departments', enterpriseId]), search],
+        queryKey: [...keys.departments.all(enterpriseId), search],
         queryFn: () => listDepartmentsFn(enterpriseId, search),
         enabled: !!enterpriseId,
     })

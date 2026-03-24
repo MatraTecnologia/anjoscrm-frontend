@@ -81,4 +81,17 @@ export const keys = {
         all: (enterpriseId: string) => ['enterprises', enterpriseId, 'ai-agents'] as const,
         detail: (id: string) => ['ai-agents', id] as const,
     },
+
+    departments: {
+        all: (enterpriseId: string) => ['departments', enterpriseId] as const,
+        members: (enterpriseId: string, deptId: string) => ['departments', enterpriseId, deptId, 'members'] as const,
+    },
+
+    workSchedules: {
+        all: (enterpriseId: string) => ['work-schedules', enterpriseId] as const,
+    },
+
+    storage: {
+        usage: (enterpriseId: string) => ['storage', enterpriseId, 'usage'] as const,
+    },
 }

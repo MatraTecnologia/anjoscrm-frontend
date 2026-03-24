@@ -16,6 +16,7 @@ export type PipelineStage = {
     aiInstructions: string | null
     createdAt: string
     _count?: { deals: number }
+    followUpConfig?: StageFollowUpConfig | null
 }
 
 export type Pipeline = {
@@ -426,15 +427,39 @@ export type FollowUpAction = {
     config: Record<string, unknown>
 }
 
+export type FollowUpStep = {
+    stepNumber: number
+    delayMinutes: number
+    label?: string
+    actions: FollowUpAction[]
+}
+
 export type StageFollowUpConfig = {
     id: string
     stageId: string
     isActive: boolean
-    triggerAfterMinutes: number
-    maxAttempts: number
-    repeatIntervalMinutes: number | null
-    actions: FollowUpAction[]
+    steps: FollowUpStep[]
     createdAt: string
+}
+
+export type FollowUpBoardDeal = {
+    id: string
+    title: string
+    lead: { id: string; name: string; phone: string | null }
+    stage: { id: string; name: string; color: string }
+    followUpCount: number
+    totalSteps: number
+    nextStepLabel: string
+    nextStepActions: string[]
+    nextStepDueAt: string
+}
+
+export type FollowUpBoardData = {
+    overdue: FollowUpBoardDeal[]
+    today: FollowUpBoardDeal[]
+    tomorrow: FollowUpBoardDeal[]
+    this_week: FollowUpBoardDeal[]
+    future: FollowUpBoardDeal[]
 }
 
 // ─── API — Follow-up Config ───────────────────────────────────────────────────
@@ -456,14 +481,19 @@ async function upsertStageFollowUpConfigFn({
     stageId: string
     enterpriseId: string
     isActive: boolean
-    triggerAfterMinutes: number
-    maxAttempts: number
-    repeatIntervalMinutes?: number | null
-    actions: FollowUpAction[]
+    steps: FollowUpStep[]
 }): Promise<StageFollowUpConfig> {
     const { data } = await api.put<StageFollowUpConfig>(
         `/pipelines/stages/${stageId}/follow-up-config`,
         body,
+        { headers: { 'X-Enterprise-Id': enterpriseId } },
+    )
+    return data
+}
+
+async function getPipelineFollowUpBoardFn(pipelineId: string, enterpriseId: string): Promise<FollowUpBoardData> {
+    const { data } = await api.get<FollowUpBoardData>(
+        `/pipelines/${pipelineId}/follow-up/board`,
         { headers: { 'X-Enterprise-Id': enterpriseId } },
     )
     return data
@@ -485,6 +515,16 @@ export function useUpsertStageFollowUpConfig() {
         mutationFn: upsertStageFollowUpConfigFn,
         onSuccess: (_data, { stageId }) => {
             qc.invalidateQueries({ queryKey: ['pipelines', 'stages', stageId, 'follow-up-config'] })
+            qc.invalidateQueries({ queryKey: ['pipelines', 'follow-up-board'] })
         },
+    })
+}
+
+export function useGetPipelineFollowUpBoard(pipelineId: string, enterpriseId: string) {
+    return useQuery({
+        queryKey: ['pipelines', 'follow-up-board', pipelineId],
+        queryFn: () => getPipelineFollowUpBoardFn(pipelineId, enterpriseId),
+        enabled: !!pipelineId && !!enterpriseId,
+        refetchInterval: 60000, // atualiza a cada minuto
     })
 }

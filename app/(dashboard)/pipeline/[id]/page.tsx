@@ -44,8 +44,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useEnterprise } from '@/hooks/use-enterprise'
 import { usePipelineSocket } from '@/hooks/use-pipeline-socket'
 import {
-    useGetPipeline, useGetStageFollowUpConfig, useUpsertStageFollowUpConfig,
-    type PipelineStage, type StageFollowUpConfig, type FollowUpAction, type FollowUpActionType,
+    useGetPipeline, useGetStageFollowUpConfig, useUpsertStageFollowUpConfig, useGetPipelineFollowUpBoard,
+    type PipelineStage, type StageFollowUpConfig, type FollowUpAction, type FollowUpActionType, type FollowUpStep, type FollowUpBoardDeal,
 } from '@/services/pipelines'
 import {
     useStageDeals, useCreateDeal, useUpdateDeal, useDeleteDeal,
@@ -375,6 +375,15 @@ function DealCardBody({
 
                 {/* Footer */}
                 <div className="px-3 pb-2 flex items-center justify-end gap-1 border-t mt-1 pt-1.5">
+                    {currentStage?.followUpConfig?.isActive && (
+                        <span
+                            className="mr-auto flex items-center gap-0.5 text-[10px] text-amber-600 dark:text-amber-400"
+                            title="Follow-up automático ativo neste estágio"
+                        >
+                            <Clock className="size-3" />
+                            Follow-up
+                        </span>
+                    )}
                     {deal.lead.phone && (
                         <button
                             className="p-1 rounded hover:bg-muted transition-colors text-green-600"
@@ -1567,18 +1576,61 @@ function ActionEditor({
     )
 }
 
-function FollowUpConfigModal({
+const BUCKET_LABELS: Record<string, string> = {
+    overdue: 'Atrasados',
+    today: 'Hoje',
+    tomorrow: 'Amanhã',
+    this_week: 'Esta semana',
+    future: 'Mais adiante',
+}
+
+const BUCKET_COLORS: Record<string, string> = {
+    overdue: 'text-red-600 dark:text-red-400',
+    today: 'text-amber-600 dark:text-amber-400',
+    tomorrow: 'text-blue-600 dark:text-blue-400',
+    this_week: 'text-violet-600 dark:text-violet-400',
+    future: 'text-muted-foreground',
+}
+
+function FollowUpBoardCard({ deal }: { deal: FollowUpBoardDeal }) {
+    return (
+        <div className="border rounded-lg p-3 bg-card space-y-2 hover:shadow-sm transition-shadow">
+            <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                    <p className="text-xs font-semibold truncate">{deal.title}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">{deal.lead.name}</p>
+                </div>
+                <span
+                    className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium flex-shrink-0"
+                    style={{
+                        backgroundColor: deal.stage.color + '22',
+                        color: deal.stage.color,
+                        border: `1px solid ${deal.stage.color}44`,
+                    }}
+                >
+                    {deal.stage.name}
+                </span>
+            </div>
+            <div className="flex items-center justify-between gap-1 text-[10px] text-muted-foreground">
+                <span className="truncate">
+                    {deal.nextStepLabel} · {deal.followUpCount + 1}/{deal.totalSteps}
+                </span>
+                <span className="flex-shrink-0">
+                    {format(new Date(deal.nextStepDueAt), "dd/MM HH:mm", { locale: ptBR })}
+                </span>
+            </div>
+        </div>
+    )
+}
+
+function FollowUpStageSettingsCard({
     stage,
     enterpriseId,
     stages,
-    open,
-    onClose,
 }: {
     stage: PipelineStage
     enterpriseId: string
     stages: PipelineStage[]
-    open: boolean
-    onClose: () => void
 }) {
     const { data: config, isLoading } = useGetStageFollowUpConfig(stage.id, enterpriseId)
     const upsert = useUpsertStageFollowUpConfig()
@@ -1586,286 +1638,260 @@ function FollowUpConfigModal({
     const members = membersData ?? []
 
     const [isActive, setIsActive] = useState(false)
-    const [triggerAfterMinutes, setTriggerAfterMinutes] = useState(1440)
-    const [maxAttempts, setMaxAttempts] = useState(1)
-    const [hasRepeat, setHasRepeat] = useState(false)
-    const [repeatIntervalMinutes, setRepeatIntervalMinutes] = useState(1440)
-    const [actions, setActions] = useState<FollowUpAction[]>([])
+    const [steps, setSteps] = useState<FollowUpStep[]>([])
+    const [isDirty, setIsDirty] = useState(false)
 
     useEffect(() => {
         if (config) {
             setIsActive(config.isActive)
-            setTriggerAfterMinutes(config.triggerAfterMinutes)
-            setMaxAttempts(config.maxAttempts)
-            setHasRepeat(config.repeatIntervalMinutes !== null)
-            setRepeatIntervalMinutes(config.repeatIntervalMinutes ?? 1440)
-            setActions(config.actions)
+            setSteps(config.steps ?? [])
         } else {
             setIsActive(false)
-            setTriggerAfterMinutes(1440)
-            setMaxAttempts(1)
-            setHasRepeat(false)
-            setRepeatIntervalMinutes(1440)
-            setActions([])
+            setSteps([])
         }
+        setIsDirty(false)
     }, [config])
 
-    function handleAddAction() {
-        setActions((prev) => [...prev, { type: 'SEND_MESSAGE', config: {} }])
+    function mark() { setIsDirty(true) }
+
+    function handleAddStep() {
+        const prevDelay = steps.length > 0 ? steps[steps.length - 1].delayMinutes : 0
+        setSteps((prev) => [
+            ...prev,
+            { stepNumber: prev.length + 1, delayMinutes: prevDelay + 1440, label: '', actions: [{ type: 'SEND_MESSAGE', config: {} }] },
+        ])
+        mark()
     }
 
     function handleSave() {
+        const normalized = steps.map((s, i) => ({ ...s, stepNumber: i + 1 }))
         upsert.mutate(
+            { stageId: stage.id, enterpriseId, isActive, steps: normalized },
             {
-                stageId: stage.id,
-                enterpriseId,
-                isActive,
-                triggerAfterMinutes,
-                maxAttempts,
-                repeatIntervalMinutes: hasRepeat ? repeatIntervalMinutes : null,
-                actions,
-            },
-            {
-                onSuccess: () => {
-                    toast.success('Configuração de follow-up salva!')
-                    onClose()
-                },
-                onError: () => toast.error('Erro ao salvar configuração.'),
+                onSuccess: () => { toast.success('Fluxo salvo!'); setIsDirty(false) },
+                onError: () => toast.error('Erro ao salvar fluxo.'),
             },
         )
     }
 
     return (
-        <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-            <SheetContent className="w-full sm:max-w-md overflow-y-auto" side="right">
-                <SheetHeader className="mb-4">
-                    <SheetTitle className="flex items-center gap-2 text-sm">
-                        <span
-                            className="inline-block size-2.5 rounded-full flex-shrink-0"
-                            style={{ backgroundColor: stage.color }}
-                        />
-                        Follow-up — {stage.name}
-                    </SheetTitle>
-                </SheetHeader>
-
-                {isLoading ? (
-                    <div className="flex items-center justify-center py-12">
-                        <Loader2 className="size-5 animate-spin text-muted-foreground" />
-                    </div>
-                ) : (
-                    <div className="space-y-5">
-                        {/* Ativar */}
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium">Ativar follow-up</p>
-                                <p className="text-xs text-muted-foreground">Executar automaticamente quando habilitado</p>
-                            </div>
-                            <Switch checked={isActive} onCheckedChange={setIsActive} />
-                        </div>
-
-                        <div className="border-t" />
-
-                        {/* Tempo de gatilho */}
-                        <TimeInputSelector
-                            label="Disparar após"
-                            value={triggerAfterMinutes}
-                            onChange={setTriggerAfterMinutes}
-                        />
-
-                        {/* Máximo de tentativas */}
-                        <div className="space-y-1">
-                            <Label className="text-xs">Máximo de tentativas</Label>
-                            <Input
-                                type="number" min={1} max={20}
-                                className="w-24 h-8 text-xs"
-                                value={maxAttempts}
-                                onChange={(e) => setMaxAttempts(Math.max(1, Number(e.target.value)))}
-                            />
-                        </div>
-
-                        {/* Repetição */}
-                        <div className="space-y-2">
-                            <div className="flex items-center gap-2">
-                                <Switch checked={hasRepeat} onCheckedChange={setHasRepeat} />
-                                <Label className="text-xs cursor-pointer" onClick={() => setHasRepeat(p => !p)}>
-                                    Repetir após cada tentativa
-                                </Label>
-                            </div>
-                            {hasRepeat && (
-                                <TimeInputSelector
-                                    label="Intervalo entre tentativas"
-                                    value={repeatIntervalMinutes}
-                                    onChange={setRepeatIntervalMinutes}
-                                />
-                            )}
-                        </div>
-
-                        <div className="border-t" />
-
-                        {/* Ações */}
-                        <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                                <Label className="text-xs font-medium">Ações</Label>
-                                <button
-                                    onClick={handleAddAction}
-                                    className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors"
-                                >
-                                    <Plus className="size-3.5" />
-                                    Adicionar ação
-                                </button>
-                            </div>
-                            {actions.length === 0 && (
-                                <div className="flex items-center gap-2 text-xs text-muted-foreground py-3 border rounded-lg px-3 bg-muted/20">
-                                    <AlertCircle className="size-3.5 flex-shrink-0" />
-                                    Nenhuma ação configurada. Adicione pelo menos uma ação.
-                                </div>
-                            )}
-                            {actions.map((action, i) => (
-                                <ActionEditor
-                                    key={i}
-                                    action={action}
-                                    stages={stages.filter((s) => s.id !== stage.id)}
-                                    members={members}
-                                    onChange={(updated) => setActions((prev) => prev.map((a, idx) => idx === i ? updated : a))}
-                                    onRemove={() => setActions((prev) => prev.filter((_, idx) => idx !== i))}
-                                />
-                            ))}
-                        </div>
-
-                        <div className="border-t pt-3 flex gap-2">
-                            <Button
-                                className="flex-1"
-                                onClick={handleSave}
-                                disabled={upsert.isPending}
-                            >
-                                {upsert.isPending ? <Loader2 className="size-4 animate-spin mr-2" /> : null}
-                                Salvar
-                            </Button>
-                            <Button variant="outline" onClick={onClose}>Cancelar</Button>
-                        </div>
-                    </div>
-                )}
-            </SheetContent>
-        </Sheet>
-    )
-}
-
-function FollowUpStageCard({
-    stage,
-    enterpriseId,
-    stages,
-}: {
-    stage: PipelineStage
-    enterpriseId: string
-    stages: PipelineStage[]
-}) {
-    const [modalOpen, setModalOpen] = useState(false)
-    const { data: config } = useGetStageFollowUpConfig(stage.id, enterpriseId)
-
-    function formatDelay(minutes: number) {
-        const { days, hours, mins } = minutesToParts(minutes)
-        const parts = []
-        if (days > 0) parts.push(`${days}d`)
-        if (hours > 0) parts.push(`${hours}h`)
-        if (mins > 0) parts.push(`${mins}min`)
-        return parts.join(' ') || '0min'
-    }
-
-    return (
-        <>
-            <div className="border rounded-xl p-4 bg-card hover:shadow-sm transition-shadow space-y-3">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <span
-                            className="inline-block size-2.5 rounded-full flex-shrink-0"
-                            style={{ backgroundColor: stage.color }}
-                        />
-                        <span className="font-medium text-sm">{stage.name}</span>
-                    </div>
-                    {config ? (
-                        <span className={cn(
-                            'text-[10px] font-medium px-2 py-0.5 rounded-full',
-                            config.isActive
-                                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
-                                : 'bg-muted text-muted-foreground',
-                        )}>
-                            {config.isActive ? 'Ativo' : 'Inativo'}
-                        </span>
-                    ) : (
-                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                            Não configurado
-                        </span>
-                    )}
+        <div className="border rounded-xl p-4 space-y-3 bg-card">
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    <span className="inline-block size-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: stage.color }} />
+                    <span className="font-medium text-sm">{stage.name}</span>
                 </div>
-
-                {config ? (
-                    <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
-                        <div className="flex flex-col gap-0.5">
-                            <span className="text-[10px] uppercase tracking-wide font-medium">Dispara após</span>
-                            <span className="font-medium text-foreground">{formatDelay(config.triggerAfterMinutes)}</span>
-                        </div>
-                        <div className="flex flex-col gap-0.5">
-                            <span className="text-[10px] uppercase tracking-wide font-medium">Ações</span>
-                            <span className="font-medium text-foreground">{config.actions.length}</span>
-                        </div>
-                        <div className="flex flex-col gap-0.5">
-                            <span className="text-[10px] uppercase tracking-wide font-medium">Tentativas</span>
-                            <span className="font-medium text-foreground">{config.maxAttempts}x</span>
-                        </div>
-                    </div>
-                ) : (
-                    <p className="text-xs text-muted-foreground">
-                        Clique em configurar para definir ações automáticas para este estágio.
-                    </p>
-                )}
-
-                <Button
-                    size="sm"
-                    variant="outline"
-                    className="w-full h-7 text-xs gap-1.5"
-                    onClick={() => setModalOpen(true)}
-                >
-                    <Settings2 className="size-3.5" />
-                    Configurar
-                </Button>
+                <div className="flex items-center gap-2">
+                    {isDirty && <span className="text-[10px] text-amber-600">Não salvo</span>}
+                    <Switch checked={isActive} onCheckedChange={(v) => { setIsActive(v); mark() }} />
+                </div>
             </div>
 
-            <FollowUpConfigModal
-                stage={stage}
-                enterpriseId={enterpriseId}
-                stages={stages}
-                open={modalOpen}
-                onClose={() => setModalOpen(false)}
-            />
-        </>
+            {isLoading ? (
+                <div className="flex justify-center py-4">
+                    <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                </div>
+            ) : (
+                <>
+                    {steps.length === 0 && (
+                        <p className="text-xs text-muted-foreground italic">
+                            Nenhuma etapa. Adicione etapas para criar o fluxo.
+                        </p>
+                    )}
+
+                    <div className="space-y-2">
+                        {steps.map((step, i) => (
+                            <div key={i} className="border rounded-lg p-3 space-y-2 bg-muted/20">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                                        Etapa {i + 1}
+                                    </span>
+                                    <button
+                                        onClick={() => { setSteps((p) => p.filter((_, idx) => idx !== i)); mark() }}
+                                        className="p-0.5 hover:bg-destructive/10 rounded text-muted-foreground hover:text-destructive transition-colors"
+                                    >
+                                        <Trash className="size-3.5" />
+                                    </button>
+                                </div>
+
+                                <Input
+                                    placeholder="Nome da etapa (ex: Lembrete 1)"
+                                    className="h-7 text-xs"
+                                    value={step.label ?? ''}
+                                    onChange={(e) => {
+                                        setSteps((p) => p.map((s, idx) => idx === i ? { ...s, label: e.target.value } : s))
+                                        mark()
+                                    }}
+                                />
+
+                                <TimeInputSelector
+                                    label="Disparar após (desde que entrou no estágio)"
+                                    value={step.delayMinutes}
+                                    onChange={(v) => {
+                                        setSteps((p) => p.map((s, idx) => idx === i ? { ...s, delayMinutes: v } : s))
+                                        mark()
+                                    }}
+                                />
+
+                                <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground">
+                                            Ações
+                                        </Label>
+                                        <button
+                                            onClick={() => {
+                                                setSteps((p) => p.map((s, idx) => idx === i
+                                                    ? { ...s, actions: [...s.actions, { type: 'SEND_MESSAGE' as FollowUpActionType, config: {} }] }
+                                                    : s,
+                                                ))
+                                                mark()
+                                            }}
+                                            className="flex items-center gap-0.5 text-[10px] text-primary hover:text-primary/80 transition-colors"
+                                        >
+                                            <Plus className="size-3" />
+                                            Ação
+                                        </button>
+                                    </div>
+                                    {step.actions.length === 0 && (
+                                        <p className="text-[10px] text-muted-foreground italic px-1">Nenhuma ação</p>
+                                    )}
+                                    {step.actions.map((action, ai) => (
+                                        <ActionEditor
+                                            key={ai}
+                                            action={action}
+                                            stages={stages.filter((s) => s.id !== stage.id)}
+                                            members={members}
+                                            onChange={(updated) => {
+                                                setSteps((p) => p.map((s, idx) => idx === i
+                                                    ? { ...s, actions: s.actions.map((a, aidx) => aidx === ai ? updated : a) }
+                                                    : s,
+                                                ))
+                                                mark()
+                                            }}
+                                            onRemove={() => {
+                                                setSteps((p) => p.map((s, idx) => idx === i
+                                                    ? { ...s, actions: s.actions.filter((_, aidx) => aidx !== ai) }
+                                                    : s,
+                                                ))
+                                                mark()
+                                            }}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="flex items-center gap-3 pt-1">
+                        <button
+                            onClick={handleAddStep}
+                            className="flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 transition-colors"
+                        >
+                            <Plus className="size-3.5" />
+                            Adicionar etapa
+                        </button>
+                        {isDirty && (
+                            <Button size="sm" className="h-7 text-xs ml-auto" onClick={handleSave} disabled={upsert.isPending}>
+                                {upsert.isPending && <Loader2 className="size-3.5 animate-spin mr-1" />}
+                                Salvar
+                            </Button>
+                        )}
+                    </div>
+                </>
+            )}
+        </div>
     )
 }
+
+const BOARD_BUCKETS = ['overdue', 'today', 'tomorrow', 'this_week', 'future'] as const
 
 function FollowUpView({
     stages,
     enterpriseId,
+    pipelineId,
 }: {
     stages: PipelineStage[]
     enterpriseId: string
+    pipelineId: string
 }) {
+    const [tab, setTab] = useState<'board' | 'settings'>('board')
+    const { data: board, isLoading: boardLoading } = useGetPipelineFollowUpBoard(pipelineId, enterpriseId)
+
     return (
-        <div className="flex-1 overflow-y-auto p-5">
-            <div className="max-w-4xl mx-auto space-y-4">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-                    <Clock className="size-4" />
-                    <span>Configure automações por tempo para cada estágio do funil.</span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {stages.map((stage) => (
-                        <FollowUpStageCard
-                            key={stage.id}
-                            stage={stage}
-                            enterpriseId={enterpriseId}
-                            stages={stages}
-                        />
-                    ))}
-                </div>
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+            {/* Sub-tabs */}
+            <div className="flex items-center px-5 pt-3 pb-0 border-b flex-shrink-0">
+                {(['board', 'settings'] as const).map((t) => (
+                    <button
+                        key={t}
+                        onClick={() => setTab(t)}
+                        className={cn(
+                            'px-4 py-2 text-xs font-medium border-b-2 -mb-px transition-colors',
+                            tab === t
+                                ? 'border-primary text-foreground'
+                                : 'border-transparent text-muted-foreground hover:text-foreground',
+                        )}
+                    >
+                        {t === 'board' ? 'Quadro' : 'Configurações'}
+                    </button>
+                ))}
             </div>
+
+            {tab === 'board' ? (
+                boardLoading ? (
+                    <div className="flex flex-1 items-center justify-center">
+                        <Loader2 className="size-5 animate-spin text-muted-foreground" />
+                    </div>
+                ) : (
+                    <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden">
+                        <div className="flex gap-3 p-4 h-full">
+                            {BOARD_BUCKETS.map((bucket) => {
+                                const deals = board?.[bucket] ?? []
+                                return (
+                                    <div key={bucket} className="w-64 flex flex-col flex-shrink-0 min-h-0">
+                                        <div className={cn(
+                                            'flex items-center gap-2 py-2 px-1 flex-shrink-0',
+                                            BUCKET_COLORS[bucket],
+                                        )}>
+                                            <Clock className="size-3.5" />
+                                            <span className="text-xs font-semibold">{BUCKET_LABELS[bucket]}</span>
+                                            <span className="ml-auto text-[10px] bg-muted text-foreground rounded-full px-1.5 py-0.5 font-medium">
+                                                {deals.length}
+                                            </span>
+                                        </div>
+                                        <div className="flex-1 overflow-y-auto space-y-2 pb-2">
+                                            {deals.length === 0 ? (
+                                                <div className="flex items-center justify-center h-16 border border-dashed rounded-lg text-xs text-muted-foreground">
+                                                    Nenhum deal
+                                                </div>
+                                            ) : (
+                                                deals.map((deal) => <FollowUpBoardCard key={deal.id} deal={deal} />)
+                                            )}
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    </div>
+                )
+            ) : (
+                <div className="flex-1 overflow-y-auto p-5">
+                    <div className="max-w-2xl mx-auto space-y-4">
+                        <p className="text-xs text-muted-foreground flex items-center gap-2">
+                            <Settings2 className="size-3.5" />
+                            Configure o fluxo de follow-up por estágio. Cada etapa dispara após o tempo definido desde que o deal entrou no estágio.
+                        </p>
+                        {stages.map((stage) => (
+                            <FollowUpStageSettingsCard
+                                key={stage.id}
+                                stage={stage}
+                                enterpriseId={enterpriseId}
+                                stages={stages}
+                            />
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
     )
 }
@@ -2065,7 +2091,7 @@ export default function PipelinePage() {
 
             {/* Follow-up View */}
             {view === 'followup' && (
-                <FollowUpView stages={pipeline.stages} enterpriseId={enterpriseId} />
+                <FollowUpView stages={pipeline.stages} enterpriseId={enterpriseId} pipelineId={pipeline.id} />
             )}
 
             {/* Kanban Board */}

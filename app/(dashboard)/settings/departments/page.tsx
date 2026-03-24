@@ -20,6 +20,9 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import {
+    DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
     AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
     AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
@@ -228,30 +231,41 @@ function DepartmentDialog({
                     <div className="flex flex-col gap-4 py-1">
                         <div className="flex items-center justify-between">
                             <p className="text-sm font-medium">Lista de atendentes</p>
-                            {availableToAdd.length > 0 && (
-                                <Select
-                                    onValueChange={handleAddMember}
-                                    value=""
-                                >
-                                    <SelectTrigger className="w-auto h-8 text-xs gap-1 px-2 text-blue-600 dark:text-blue-400 border-0 shadow-none">
-                                        <Plus className="size-3.5" />
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <button
+                                        type="button"
+                                        disabled={addingMember}
+                                        className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 px-2 h-8 rounded hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors disabled:opacity-50"
+                                    >
+                                        {addingMember
+                                            ? <Loader2 className="size-3.5 animate-spin" />
+                                            : <Plus className="size-3.5" />
+                                        }
                                         <span>Adicionar</span>
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {availableToAdd.map(m => (
-                                            <SelectItem key={m.userId} value={m.userId}>
-                                                <div className="flex items-center gap-2">
-                                                    <Avatar className="size-5">
-                                                        <AvatarImage src={m.user.image ?? undefined} />
-                                                        <AvatarFallback className="text-[10px]">{getInitials(m.user.name)}</AvatarFallback>
-                                                    </Avatar>
-                                                    <span>{m.user.name}</span>
-                                                </div>
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            )}
+                                    </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-52 max-h-60 overflow-y-auto">
+                                    {availableToAdd.length === 0 ? (
+                                        <div className="px-2 py-3 text-xs text-muted-foreground text-center">
+                                            Todos os membros já foram adicionados.
+                                        </div>
+                                    ) : (
+                                        availableToAdd.map(m => (
+                                            <DropdownMenuItem
+                                                key={m.userId}
+                                                onSelect={() => handleAddMember(m.userId)}
+                                            >
+                                                <Avatar className="size-5 mr-2 shrink-0">
+                                                    <AvatarImage src={m.user.image ?? undefined} />
+                                                    <AvatarFallback className="text-[10px]">{getInitials(m.user.name)}</AvatarFallback>
+                                                </Avatar>
+                                                <span className="truncate">{m.user.name}</span>
+                                            </DropdownMenuItem>
+                                        ))
+                                    )}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
                         </div>
 
                         <p className="text-xs text-muted-foreground -mt-2">

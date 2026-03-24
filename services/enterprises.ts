@@ -356,3 +356,38 @@ export function useUpdateMemberRole() {
         },
     })
 }
+
+// ─── Usage ────────────────────────────────────────────────────────────────────
+
+export type EnterpriseUsage = {
+    limits: {
+        maxLeads: number
+        maxUsers: number
+        maxConnections: number
+        maxPipelines: number
+    }
+    usage: {
+        leads: number
+        members: number
+        connections: number
+        pipelines: number
+        automations: number
+        aiAgents: number
+    }
+}
+
+async function getEnterpriseUsageFn(id: string): Promise<EnterpriseUsage> {
+    const { data } = await api.get<EnterpriseUsage>(`/enterprises/${id}/usage`, {
+        headers: { 'X-Enterprise-Id': id },
+    })
+    return data
+}
+
+export function useEnterpriseUsage(id: string) {
+    return useQuery({
+        queryKey: ['enterprises', id, 'usage'],
+        queryFn: () => getEnterpriseUsageFn(id),
+        enabled: !!id,
+        refetchInterval: 60_000,
+    })
+}

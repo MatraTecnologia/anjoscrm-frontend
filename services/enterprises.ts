@@ -385,7 +385,7 @@ async function getEnterpriseUsageFn(id: string): Promise<EnterpriseUsage> {
 
 export function useEnterpriseUsage(id: string) {
     return useQuery({
-        queryKey: ['enterprises', id, 'usage'],
+        queryKey: keys.enterprises.usage(id),
         queryFn: () => getEnterpriseUsageFn(id),
         enabled: !!id,
         refetchInterval: 60_000,

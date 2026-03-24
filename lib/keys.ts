@@ -13,6 +13,7 @@ export const keys = {
         members: (id: string) => ['enterprises', id, 'members'] as const,
         roles: (id: string) => ['enterprises', id, 'roles'] as const,
         invites: (id: string) => ['enterprises', id, 'invites'] as const,
+        usage: (id: string) => ['enterprises', id, 'usage'] as const,
     },
 
     leads: {

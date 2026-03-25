@@ -94,6 +94,15 @@ const SORT_LABELS: Record<Sort, string> = {
     alpha: 'Alfabética',
 }
 
+type Filters = {
+    tagIds: string[]
+    assigneeId: string | null
+    minValue: string
+    maxValue: string
+}
+
+const EMPTY_FILTERS: Filters = { tagIds: [], assigneeId: null, minValue: '', maxValue: '' }
+
 // ─── Deal Card Body (visual compartilhado) ────────────────────────────────────
 
 function DealCardBody({
@@ -1285,6 +1294,8 @@ function KanbanColumn({
     pipelineId,
     enterpriseId,
     sort,
+    search,
+    filters,
     onWhatsappClick,
 }: {
     stage: PipelineStage
@@ -1292,6 +1303,8 @@ function KanbanColumn({
     pipelineId: string
     enterpriseId: string
     sort: Sort
+    search?: string
+    filters?: Filters
     onWhatsappClick?: (lead: DealLead) => void
 }) {
     const scrollRef = useRef<HTMLDivElement>(null)
@@ -1311,8 +1324,36 @@ function KanbanColumn({
     const total = data?.pages[0]?.total ?? stage._count?.deals ?? 0
     const totalValue = data?.pages[0]?.totalValue ?? 0
 
+    const filteredDeals = useMemo(() => {
+        let result = allDeals
+        if (search) {
+            const q = search.toLowerCase()
+            result = result.filter(d =>
+                d.title.toLowerCase().includes(q) ||
+                d.lead.name.toLowerCase().includes(q)
+            )
+        }
+        if (filters) {
+            if (filters.tagIds.length > 0) {
+                result = result.filter(d =>
+                    filters.tagIds.some(tagId => d.lead.tags.some(t => t.id === tagId))
+                )
+            }
+            if (filters.assigneeId) {
+                result = result.filter(d => d.lead.assignee?.id === filters.assigneeId)
+            }
+            if (filters.minValue) {
+                result = result.filter(d => Number(d.value ?? 0) >= Number(filters.minValue.replace(',', '.')))
+            }
+            if (filters.maxValue) {
+                result = result.filter(d => Number(d.value ?? 0) <= Number(filters.maxValue.replace(',', '.')))
+            }
+        }
+        return result
+    }, [allDeals, search, filters])
+
     const virtualizer = useVirtualizer({
-        count: allDeals.length + (hasNextPage ? 1 : 0),
+        count: filteredDeals.length + (hasNextPage ? 1 : 0),
         getScrollElement: () => scrollRef.current,
         estimateSize: () => 140,
         overscan: 4,
@@ -1322,10 +1363,10 @@ function KanbanColumn({
         const items = virtualizer.getVirtualItems()
         if (!items.length) return
         const last = items[items.length - 1]
-        if (last.index >= allDeals.length && hasNextPage && !isFetchingNextPage) {
+        if (last.index >= filteredDeals.length && hasNextPage && !isFetchingNextPage) {
             fetchNextPage()
         }
-    }, [virtualizer.getVirtualItems(), hasNextPage, isFetchingNextPage, allDeals.length, fetchNextPage])
+    }, [virtualizer.getVirtualItems(), hasNextPage, isFetchingNextPage, filteredDeals.length, fetchNextPage])
 
     return (
         <div className="w-72 flex-shrink-0 flex flex-col rounded-xl bg-muted/40 border border-border/60">
@@ -1334,7 +1375,12 @@ function KanbanColumn({
                 <div className="flex items-center gap-1.5">
                     <span className="size-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: stage.color }} />
                     <span className="text-sm font-semibold truncate">{stage.name}</span>
-                    <span className="ml-auto text-xs text-muted-foreground font-mono">{total}</span>
+                    <span className="ml-auto text-xs text-muted-foreground font-mono">
+                        {(search || filters?.tagIds.length || filters?.assigneeId || filters?.minValue || filters?.maxValue)
+                            ? `${filteredDeals.length}/${total}`
+                            : total
+                        }
+                    </span>
                 </div>
                 <div className="text-xs font-medium text-blue-600 mt-0.5 pl-4">
                     {formatBRL(totalValue)}
@@ -1358,17 +1404,17 @@ function KanbanColumn({
                         <div className="flex justify-center py-10">
                             <Loader2 className="size-4 animate-spin text-muted-foreground" />
                         </div>
-                    ) : allDeals.length === 0 ? (
+                    ) : filteredDeals.length === 0 ? (
                         <div className={cn(
                             'flex items-center justify-center h-20 text-xs text-muted-foreground rounded-lg transition-colors',
                             isOver && 'border-2 border-dashed border-blue-300 bg-blue-50/50 dark:bg-blue-950/20',
                         )}>
-                            {isOver ? 'Soltar aqui' : 'Nenhum negócio'}
+                            {isOver ? 'Soltar aqui' : allDeals.length > 0 ? 'Nenhum resultado' : 'Nenhum negócio'}
                         </div>
                     ) : (
                         <div style={{ height: virtualizer.getTotalSize(), width: '100%', position: 'relative' }}>
                             {virtualizer.getVirtualItems().map((vItem) => {
-                                const isSentinel = vItem.index >= allDeals.length
+                                const isSentinel = vItem.index >= filteredDeals.length
                                 return (
                                     <div
                                         key={vItem.key}
@@ -1384,7 +1430,7 @@ function KanbanColumn({
                                             </div>
                                         ) : (
                                             <DealCard
-                                                deal={allDeals[vItem.index]}
+                                                deal={filteredDeals[vItem.index]}
                                                 index={vItem.index}
                                                 stages={stages}
                                                 enterpriseId={enterpriseId}
@@ -1896,6 +1942,170 @@ function FollowUpView({
     )
 }
 
+// ─── Filter Sheet ─────────────────────────────────────────────────────────────
+
+function FilterSheet({
+    open,
+    onOpenChange,
+    filters,
+    onApply,
+    enterpriseId,
+}: {
+    open: boolean
+    onOpenChange: (v: boolean) => void
+    filters: Filters
+    onApply: (f: Filters) => void
+    enterpriseId: string
+}) {
+    const [local, setLocal] = useState<Filters>(filters)
+    const { data: allTags = [] } = useListTags(enterpriseId)
+    const { data: membersData = [] } = useMembers(enterpriseId)
+
+    useEffect(() => {
+        if (open) setLocal(filters)
+    }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+
+    function toggleTag(id: string) {
+        setLocal(p => ({
+            ...p,
+            tagIds: p.tagIds.includes(id) ? p.tagIds.filter(t => t !== id) : [...p.tagIds, id],
+        }))
+    }
+
+    return (
+        <Sheet open={open} onOpenChange={onOpenChange}>
+            <SheetContent className="w-80 flex flex-col gap-0 p-0" side="right">
+                <SheetHeader className="px-5 py-4 border-b">
+                    <SheetTitle className="text-sm">Filtros</SheetTitle>
+                </SheetHeader>
+
+                <div className="flex-1 overflow-y-auto p-5 space-y-5">
+                    {/* Tags */}
+                    <div className="space-y-2">
+                        <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tags</Label>
+                        {allTags.length === 0 ? (
+                            <p className="text-xs text-muted-foreground">Nenhuma tag cadastrada</p>
+                        ) : (
+                            <div className="flex flex-wrap gap-1.5">
+                                {allTags.map(tag => {
+                                    const selected = local.tagIds.includes(tag.id)
+                                    return (
+                                        <button
+                                            key={tag.id}
+                                            onClick={() => toggleTag(tag.id)}
+                                            className={cn(
+                                                'inline-flex items-center px-2 py-1 rounded-full text-[11px] font-medium transition-all',
+                                                selected ? 'opacity-100' : 'opacity-50',
+                                            )}
+                                            style={{
+                                                backgroundColor: tag.color + '22',
+                                                color: tag.color,
+                                                border: `1px solid ${selected ? tag.color : tag.color + '44'}`,
+                                                boxShadow: selected ? `0 0 0 2px ${tag.color}33` : undefined,
+                                            }}
+                                        >
+                                            {selected && <Check className="size-2.5 mr-1 flex-shrink-0" />}
+                                            {tag.name}
+                                        </button>
+                                    )
+                                })}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Atendente */}
+                    <div className="space-y-2">
+                        <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Atendente</Label>
+                        <div className="flex flex-col rounded-md border overflow-hidden max-h-44 overflow-y-auto">
+                            <button
+                                onClick={() => setLocal(p => ({ ...p, assigneeId: null }))}
+                                className={cn(
+                                    'flex items-center gap-2 px-3 py-2 text-xs hover:bg-muted transition-colors text-left',
+                                    !local.assigneeId && 'bg-blue-50 dark:bg-blue-950/30 text-blue-600 font-medium',
+                                )}
+                            >
+                                <div className="size-5 rounded-full flex-shrink-0 flex items-center justify-center bg-muted">
+                                    <User className="size-3 text-muted-foreground" />
+                                </div>
+                                <span className="flex-1">Todos</span>
+                                {!local.assigneeId && <Check className="size-3 text-blue-500 flex-shrink-0" />}
+                            </button>
+                            {membersData.map(m => (
+                                <button
+                                    key={m.id}
+                                    onClick={() => setLocal(p => ({ ...p, assigneeId: m.user.id }))}
+                                    className={cn(
+                                        'flex items-center gap-2 px-3 py-2 text-xs hover:bg-muted transition-colors text-left',
+                                        local.assigneeId === m.user.id && 'bg-blue-50 dark:bg-blue-950/30 text-blue-600 font-medium',
+                                    )}
+                                >
+                                    <div
+                                        className="size-5 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[9px] font-bold"
+                                        style={{ backgroundColor: avatarColor(m.user.name) }}
+                                    >
+                                        {initials(m.user.name)}
+                                    </div>
+                                    <span className="flex-1 truncate">{m.user.name}</span>
+                                    {local.assigneeId === m.user.id && <Check className="size-3 text-blue-500 flex-shrink-0" />}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Valor */}
+                    <div className="space-y-2">
+                        <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Valor</Label>
+                        <div className="flex gap-3">
+                            <div className="flex-1 flex flex-col gap-1">
+                                <Label className="text-[10px] text-muted-foreground">Mínimo</Label>
+                                <div className="relative">
+                                    <span className="absolute left-2.5 top-2 text-xs text-muted-foreground">R$</span>
+                                    <Input
+                                        className="pl-8 h-8 text-xs"
+                                        placeholder="0,00"
+                                        value={local.minValue}
+                                        onChange={e => setLocal(p => ({ ...p, minValue: e.target.value.replace(/[^0-9,]/g, '') }))}
+                                    />
+                                </div>
+                            </div>
+                            <div className="flex-1 flex flex-col gap-1">
+                                <Label className="text-[10px] text-muted-foreground">Máximo</Label>
+                                <div className="relative">
+                                    <span className="absolute left-2.5 top-2 text-xs text-muted-foreground">R$</span>
+                                    <Input
+                                        className="pl-8 h-8 text-xs"
+                                        placeholder="0,00"
+                                        value={local.maxValue}
+                                        onChange={e => setLocal(p => ({ ...p, maxValue: e.target.value.replace(/[^0-9,]/g, '') }))}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="px-5 py-3 border-t flex items-center gap-2">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => { setLocal(EMPTY_FILTERS); onApply(EMPTY_FILTERS) }}
+                    >
+                        Limpar filtros
+                    </Button>
+                    <Button
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => { onApply(local); onOpenChange(false) }}
+                    >
+                        Aplicar filtros
+                    </Button>
+                </div>
+            </SheetContent>
+        </Sheet>
+    )
+}
+
 // ─── Página principal ─────────────────────────────────────────────────────────
 
 export default function PipelinePage() {
@@ -1915,6 +2125,15 @@ export default function PipelinePage() {
     const [activeTab, setActiveTab] = useState<Tab>('recent')
     const [activeDeal, setActiveDeal] = useState<Deal | null>(null)
     const [chatLead, setChatLead] = useState<DealLead | null>(null)
+    const [search, setSearch] = useState('')
+    const [filterOpen, setFilterOpen] = useState(false)
+    const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS)
+
+    const activeFilterCount =
+        (filters.tagIds.length > 0 ? 1 : 0) +
+        (filters.assigneeId ? 1 : 0) +
+        (filters.minValue ? 1 : 0) +
+        (filters.maxValue ? 1 : 0)
 
     function handleWhatsappClick(lead: DealLead) {
         setChatLead(prev => prev?.id === lead.id ? null : lead)
@@ -2055,13 +2274,34 @@ export default function PipelinePage() {
                     <div className="relative">
                         <Search className="absolute left-2.5 top-2 size-3.5 text-muted-foreground" />
                         <input
-                            className="pl-8 pr-3 py-1.5 text-xs border rounded-md bg-background w-36 focus:outline-none focus:ring-1 focus:ring-ring"
-                            placeholder="Pesquisar..."
+                            className="pl-8 pr-3 py-1.5 text-xs border rounded-md bg-background w-48 focus:outline-none focus:ring-1 focus:ring-ring"
+                            placeholder="Pesquisar negócios..."
+                            value={search}
+                            onChange={e => setSearch(e.target.value)}
                         />
+                        {search && (
+                            <button
+                                onClick={() => setSearch('')}
+                                className="absolute right-2 top-2 text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                                <X className="size-3.5" />
+                            </button>
+                        )}
                     </div>
-                    <button className="flex items-center gap-1.5 px-3 py-1.5 text-xs border rounded-md hover:bg-muted transition-colors">
+                    <button
+                        onClick={() => setFilterOpen(true)}
+                        className={cn(
+                            'relative flex items-center gap-1.5 px-3 py-1.5 text-xs border rounded-md hover:bg-muted transition-colors',
+                            activeFilterCount > 0 && 'border-blue-500 text-blue-600',
+                        )}
+                    >
                         <SlidersHorizontal className="size-3.5" />
                         Filtros
+                        {activeFilterCount > 0 && (
+                            <span className="absolute -top-1.5 -right-1.5 size-4 flex items-center justify-center bg-blue-600 text-white text-[9px] font-bold rounded-full">
+                                {activeFilterCount}
+                            </span>
+                        )}
                     </button>
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -2112,6 +2352,8 @@ export default function PipelinePage() {
                                 pipelineId={pipeline.id}
                                 enterpriseId={enterpriseId}
                                 sort={sort}
+                                search={search}
+                                filters={filters}
                                 onWhatsappClick={handleWhatsappClick}
                             />
                         ))}

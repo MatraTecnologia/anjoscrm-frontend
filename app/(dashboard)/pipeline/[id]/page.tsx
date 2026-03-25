@@ -2115,6 +2115,8 @@ export default function PipelinePage() {
     const { data: pipeline, isLoading } = useGetPipeline(id, enterpriseId)
     const updateDeal = useUpdateDeal()
     const deleteDeal = useDeleteDeal()
+    const { data: allTagsPage = [] } = useListTags(enterpriseId)
+    const { data: allMembers = [] } = useMembers(enterpriseId)
 
     // Tempo real: recebe eventos de outros usuários na mesma pipeline
     usePipelineSocket(id, enterpriseId)
@@ -2208,9 +2210,6 @@ export default function PipelinePage() {
             </div>
         )
     }
-
-    const { data: allTagsPage = [] } = useListTags(enterpriseId)
-    const { data: allMembers = [] } = useMembers(enterpriseId)
 
     return (
         <div className="flex flex-col flex-1 min-h-0 overflow-hidden">

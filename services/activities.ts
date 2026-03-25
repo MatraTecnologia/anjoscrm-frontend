@@ -97,6 +97,25 @@ async function deleteActivityFn({ id, enterpriseId }: { id: string; enterpriseId
     })
 }
 
+async function listEnterpriseActivitiesFn({
+    enterpriseId,
+    from,
+    to,
+}: {
+    enterpriseId: string
+    from?: string
+    to?: string
+}): Promise<Activity[]> {
+    const params: Record<string, string> = {}
+    if (from) params.from = from
+    if (to) params.to = to
+    const { data } = await api.get<Activity[]>(`/activities`, {
+        params,
+        headers: { 'X-Enterprise-Id': enterpriseId },
+    })
+    return data
+}
+
 // ─── Hooks ────────────────────────────────────────────────────────────────────
 
 export function useLeadActivities(leadId: string, enterpriseId: string) {
@@ -107,12 +126,20 @@ export function useLeadActivities(leadId: string, enterpriseId: string) {
     })
 }
 
+export function useEnterpriseActivities(enterpriseId: string, from?: string, to?: string) {
+    return useQuery({
+        queryKey: [...keys.activities.all(enterpriseId), from ?? '', to ?? ''],
+        queryFn: () => listEnterpriseActivitiesFn({ enterpriseId, from, to }),
+        enabled: !!enterpriseId,
+    })
+}
+
 export function useCreateActivity() {
     const queryClient = useQueryClient()
     return useMutation({
         mutationFn: createActivityFn,
         onSuccess: (_data, { leadId }) => {
-            queryClient.invalidateQueries({ queryKey: keys.activities.byLead(leadId) })
+            queryClient.invalidateQueries({ queryKey: ['activities'] })
         },
     })
 }
@@ -121,8 +148,8 @@ export function useUpdateActivity() {
     const queryClient = useQueryClient()
     return useMutation({
         mutationFn: updateActivityFn,
-        onSuccess: (data) => {
-            queryClient.invalidateQueries({ queryKey: keys.activities.byLead(data.leadId) })
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['activities'] })
         },
     })
 }
@@ -131,8 +158,8 @@ export function useDeleteActivity() {
     const queryClient = useQueryClient()
     return useMutation({
         mutationFn: deleteActivityFn,
-        onSuccess: (_data, { leadId }) => {
-            queryClient.invalidateQueries({ queryKey: keys.activities.byLead(leadId) })
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['activities'] })
         },
     })
 }
@@ -142,8 +169,8 @@ export function useToggleActivityComplete() {
     return useMutation({
         mutationFn: ({ id, enterpriseId, completed }: { id: string; enterpriseId: string; leadId: string; completed: boolean }) =>
             updateActivityFn({ id, enterpriseId, completed }),
-        onSuccess: (data) => {
-            queryClient.invalidateQueries({ queryKey: keys.activities.byLead(data.leadId) })
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['activities'] })
         },
     })
 }

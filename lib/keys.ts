@@ -106,5 +106,6 @@ export const keys = {
 
     activities: {
         byLead: (leadId: string) => ['activities', 'lead', leadId] as const,
+        all: (enterpriseId: string) => ['activities', 'enterprise', enterpriseId] as const,
     },
 }

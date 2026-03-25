@@ -2383,6 +2383,14 @@ export default function PipelinePage() {
                     onClose={() => setChatLead(null)}
                 />
             )}
+
+            <FilterSheet
+                open={filterOpen}
+                onOpenChange={setFilterOpen}
+                filters={filters}
+                onApply={setFilters}
+                enterpriseId={enterpriseId}
+            />
         </div>
     )
 }

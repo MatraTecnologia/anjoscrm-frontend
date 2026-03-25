@@ -17,7 +17,7 @@ import {
     Clock,
     Activity,
     Plug,
-    Wifi,
+
     HardDrive,
     ChevronLeft,
     ChevronRight,
@@ -39,8 +39,7 @@ const settingsNav = [
     { href: '/settings/activity-types', icon: Activity, label: 'Tipos de atividades' },
     { href: "/settings/history-all", icon: Activity, label: "Histórico" },
     { href: '/settings/storage', icon: HardDrive, label: 'Armazenamento' },
-    { href: '/settings/integrations', icon: Plug, label: 'Integrações' },
-    { href: '/settings/connections', icon: Wifi, label: 'Conexões' },
+    { href: '/settings/integrations', icon: Plug, label: 'Integrações' }
 ]
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {

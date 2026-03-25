@@ -95,4 +95,16 @@ export const keys = {
     storage: {
         usage: (enterpriseId: string) => ['storage', enterpriseId, 'usage'] as const,
     },
+
+    lossReasons: {
+        all: (enterpriseId: string) => ['enterprises', enterpriseId, 'loss-reasons'] as const,
+    },
+
+    activityTypes: {
+        all: (enterpriseId: string) => ['enterprises', enterpriseId, 'activity-types'] as const,
+    },
+
+    activities: {
+        byLead: (leadId: string) => ['activities', 'lead', leadId] as const,
+    },
 }

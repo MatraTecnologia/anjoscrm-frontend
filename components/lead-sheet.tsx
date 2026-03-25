@@ -9,7 +9,7 @@ import {
     Plus, ArrowRight, Trash2, Pencil, ChevronDown,
     SlidersHorizontal, MessageSquarePlus, Send, Tag,
     ShoppingCart, MoreHorizontal, Check, Clock, X,
-    Camera, Copy, ExternalLink,
+    Camera, Copy, ExternalLink, Calendar, CheckCircle2, Circle,
 } from 'lucide-react'
 import type { Value as PhoneValue } from 'react-phone-number-input'
 import Cropper from 'react-easy-crop'
@@ -39,6 +39,8 @@ import { useMembers } from '@/services/enterprises'
 import { useListLeadAuditLogs, useAddLeadComment, ACTION_LABELS, type AuditLog } from '@/services/audit'
 import { useLeadDeals, type DealWithPipeline } from '@/services/deals'
 import { useLeadCustomFieldValues, useSaveLeadCustomFieldValues, type CustomFieldWithValue } from '@/services/custom-fields'
+import { useLeadActivities, useCreateActivity, useToggleActivityComplete, useDeleteActivity, type Activity } from '@/services/activities'
+import { useListActivityTypes } from '@/services/activity-types'
 
 // ─── Crop helpers ─────────────────────────────────────────────────────────────
 

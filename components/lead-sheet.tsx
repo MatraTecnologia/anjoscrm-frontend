@@ -407,7 +407,7 @@ function HistoricoTab({ leadId, enterpriseId }: { leadId: string; enterpriseId: 
                 </div>
             ) : logs.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-2">
-                    <Activity className="size-10 opacity-20" />
+                    <ActivityIcon className="size-10 opacity-20" />
                     <p className="text-sm">{filter === 'all' ? 'Nenhuma atividade registrada.' : `Nenhum evento de "${FILTER_LABELS[filter]}" encontrado.`}</p>
                 </div>
             ) : (
@@ -691,7 +691,7 @@ function DealDetailTab({ deal, dealNumber }: { deal: DealWithPipeline; dealNumbe
                     {['campos', 'anexos', 'historico', 'atividades'].map(v => (
                         <TabsContent key={v} value={v} className="mt-0 h-full">
                             <div className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-2">
-                                <Activity className="size-10 opacity-20" />
+                                <ActivityIcon className="size-10 opacity-20" />
                                 <p className="text-sm capitalize">{v} em breve.</p>
                             </div>
                         </TabsContent>

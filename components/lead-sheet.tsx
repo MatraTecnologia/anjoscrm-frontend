@@ -5,12 +5,13 @@ import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import {
-    User, Activity, Briefcase,
+    User, Briefcase,
     MessageCircle, Files, Headphones, Loader2,
     Plus, ArrowRight, Trash2, Pencil, ChevronDown,
     SlidersHorizontal, MessageSquarePlus, Send, Tag,
     ShoppingCart, MoreHorizontal, Check, Clock, X,
     Camera, Copy, ExternalLink, Calendar, CheckCircle2, Circle,
+    Activity,
 } from 'lucide-react'
 import type { Value as PhoneValue } from 'react-phone-number-input'
 import Cropper from 'react-easy-crop'
@@ -64,10 +65,10 @@ async function getCroppedImg(imageSrc: string, pixelCrop: Area): Promise<string>
 // ─── CropModal ────────────────────────────────────────────────────────────────
 
 function CropModal({ src, onSave, onClose }: { src: string; onSave: (dataUrl: string) => void; onClose: () => void }) {
-    const [crop, setCrop]       = useState({ x: 0, y: 0 })
-    const [zoom, setZoom]       = useState(1)
+    const [crop, setCrop] = useState({ x: 0, y: 0 })
+    const [zoom, setZoom] = useState(1)
     const [croppedArea, setCroppedArea] = useState<Area | null>(null)
-    const [saving, setSaving]   = useState(false)
+    const [saving, setSaving] = useState(false)
 
     const onCropComplete = useCallback((_: Area, areaPixels: Area) => {
         setCroppedArea(areaPixels)
@@ -165,9 +166,9 @@ function applyDocMask(raw: string): string {
     // CNPJ: 00.000.000/0000-00
     const n = d.slice(0, 14)
     if (n.length > 12) return `${n.slice(0, 2)}.${n.slice(2, 5)}.${n.slice(5, 8)}/${n.slice(8, 12)}-${n.slice(12)}`
-    if (n.length > 8)  return `${n.slice(0, 2)}.${n.slice(2, 5)}.${n.slice(5, 8)}/${n.slice(8)}`
-    if (n.length > 5)  return `${n.slice(0, 2)}.${n.slice(2, 5)}.${n.slice(5)}`
-    if (n.length > 2)  return `${n.slice(0, 2)}.${n.slice(2)}`
+    if (n.length > 8) return `${n.slice(0, 2)}.${n.slice(2, 5)}.${n.slice(5, 8)}/${n.slice(8)}`
+    if (n.length > 5) return `${n.slice(0, 2)}.${n.slice(2, 5)}.${n.slice(5)}`
+    if (n.length > 2) return `${n.slice(0, 2)}.${n.slice(2)}`
     return n
 }
 
@@ -176,16 +177,16 @@ function applyDocMask(raw: string): string {
 type FilterType = 'all' | 'deal' | 'lead' | 'comment'
 
 const FILTER_LABELS: Record<FilterType, string> = {
-    all:     'Todos',
-    deal:    'Negócios',
-    lead:    'Lead',
+    all: 'Todos',
+    deal: 'Negócios',
+    lead: 'Lead',
     comment: 'Comentários',
 }
 
 function matchesFilter(log: AuditLog, filter: FilterType): boolean {
-    if (filter === 'all')     return true
-    if (filter === 'deal')    return log.action.startsWith('deal.')
-    if (filter === 'lead')    return log.action.startsWith('lead.')
+    if (filter === 'all') return true
+    if (filter === 'deal') return log.action.startsWith('deal.')
+    if (filter === 'lead') return log.action.startsWith('lead.')
     if (filter === 'comment') return log.action === 'comment.added'
     return true
 }
@@ -194,12 +195,12 @@ function matchesFilter(log: AuditLog, filter: FilterType): boolean {
 
 function TimelineIcon({ action }: { action: string }) {
     const base = 'flex size-9 shrink-0 items-center justify-center rounded-full text-white'
-    if (action === 'deal.moved')    return <span className={`${base} bg-emerald-500`}><ArrowRight className="size-4" /></span>
-    if (action === 'deal.created')  return <span className={`${base} bg-emerald-500`}><Briefcase className="size-4" /></span>
-    if (action === 'deal.deleted')  return <span className={`${base} bg-red-500`}><Trash2 className="size-4" /></span>
-    if (action === 'deal.updated')  return <span className={`${base} bg-emerald-500`}><Briefcase className="size-4" /></span>
-    if (action === 'lead.created')  return <span className={`${base} bg-blue-500`}><User className="size-4" /></span>
-    if (action === 'lead.updated')  return <span className={`${base} bg-blue-500`}><Pencil className="size-4" /></span>
+    if (action === 'deal.moved') return <span className={`${base} bg-emerald-500`}><ArrowRight className="size-4" /></span>
+    if (action === 'deal.created') return <span className={`${base} bg-emerald-500`}><Briefcase className="size-4" /></span>
+    if (action === 'deal.deleted') return <span className={`${base} bg-red-500`}><Trash2 className="size-4" /></span>
+    if (action === 'deal.updated') return <span className={`${base} bg-emerald-500`}><Briefcase className="size-4" /></span>
+    if (action === 'lead.created') return <span className={`${base} bg-blue-500`}><User className="size-4" /></span>
+    if (action === 'lead.updated') return <span className={`${base} bg-blue-500`}><Pencil className="size-4" /></span>
     if (action === 'lead.tag_added' || action === 'lead.tag_removed') return <span className={`${base} bg-blue-500`}><Tag className="size-4" /></span>
     if (action === 'comment.added') return <span className={`${base} bg-purple-500`}><MessageCircle className="size-4" /></span>
     return <span className={`${base} bg-muted-foreground`}><Activity className="size-4" /></span>
@@ -214,7 +215,7 @@ function TimelineItem({ log, isLast }: { log: AuditLog; isLast: boolean }) {
 
     if (log.action === 'deal.moved') {
         const from = meta?.fromStageName as string | undefined
-        const to   = meta?.toStageName   as string | undefined
+        const to = meta?.toStageName as string | undefined
         content = (
             <span>
                 Negócio{' '}
@@ -565,7 +566,7 @@ function PipelineStepper({ stages, currentStageId }: {
     return (
         <div className="flex items-start overflow-x-auto pb-2">
             {stages.map((stage, i) => {
-                const isPast    = i < currentIdx
+                const isPast = i < currentIdx
                 const isCurrent = i === currentIdx
 
                 return (
@@ -578,11 +579,10 @@ function PipelineStepper({ stages, currentStageId }: {
                                     <div className={`h-0.5 flex-1 ${i <= currentIdx ? 'bg-primary' : 'bg-border'}`} />
                                 )}
                                 {/* Icon */}
-                                <div className={`flex size-10 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
-                                    isCurrent ? 'bg-primary border-primary text-white' :
-                                    isPast    ? 'bg-muted border-muted-foreground/20 text-muted-foreground' :
-                                               'bg-background border-border text-muted-foreground'
-                                }`}>
+                                <div className={`flex size-10 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${isCurrent ? 'bg-primary border-primary text-white' :
+                                    isPast ? 'bg-muted border-muted-foreground/20 text-muted-foreground' :
+                                        'bg-background border-border text-muted-foreground'
+                                    }`}>
                                     {isCurrent || isPast
                                         ? <Check className="size-4" />
                                         : <Clock className="size-3.5" />
@@ -638,16 +638,15 @@ function DealDetailTab({ deal, dealNumber }: { deal: DealWithPipeline; dealNumbe
                 <div className="flex gap-4 border-b mb-5">
                     {[
                         { key: 'completa', label: 'Pipeline Completa' },
-                        { key: 'jornada',  label: 'Jornada do Negócio' },
+                        { key: 'jornada', label: 'Jornada do Negócio' },
                     ].map(({ key, label }) => (
                         <button
                             key={key}
                             onClick={() => setPipelineSubTab(key as typeof pipelineSubTab)}
-                            className={`text-sm pb-2 border-b-2 transition-colors ${
-                                pipelineSubTab === key
-                                    ? 'border-primary text-foreground font-medium'
-                                    : 'border-transparent text-muted-foreground hover:text-foreground'
-                            }`}
+                            className={`text-sm pb-2 border-b-2 transition-colors ${pipelineSubTab === key
+                                ? 'border-primary text-foreground font-medium'
+                                : 'border-transparent text-muted-foreground hover:text-foreground'
+                                }`}
                         >
                             {label}
                         </button>
@@ -666,11 +665,11 @@ function DealDetailTab({ deal, dealNumber }: { deal: DealWithPipeline; dealNumbe
             <Tabs defaultValue="produtos" className="flex flex-col flex-1 min-h-0">
                 <TabsList className="w-full justify-start rounded-none border-b bg-transparent h-auto px-3 py-2 gap-1 shrink-0">
                     {[
-                        { value: 'produtos',  label: 'Produtos e Valores' },
-                        { value: 'campos',    label: 'Campos adicionais' },
-                        { value: 'anexos',    label: 'Anexos' },
+                        { value: 'produtos', label: 'Produtos e Valores' },
+                        { value: 'campos', label: 'Campos adicionais' },
+                        { value: 'anexos', label: 'Anexos' },
                         { value: 'historico', label: 'Histórico' },
-                        { value: 'atividades',label: 'Atividades' },
+                        { value: 'atividades', label: 'Atividades' },
                     ].map(({ value, label }) => (
                         <TabsTrigger
                             key={value}
@@ -711,18 +710,18 @@ function AtividadesTab({ leadId, enterpriseId }: { leadId: string; enterpriseId:
     const [deleteTarget, setDeleteTarget] = useState<Activity | null>(null)
 
     // Form fields
-    const [formTitle, setFormTitle]           = useState('')
-    const [formTypeId, setFormTypeId]         = useState('')
-    const [formStartAt, setFormStartAt]       = useState('')
-    const [formEndAt, setFormEndAt]           = useState('')
+    const [formTitle, setFormTitle] = useState('')
+    const [formTypeId, setFormTypeId] = useState('')
+    const [formStartAt, setFormStartAt] = useState('')
+    const [formEndAt, setFormEndAt] = useState('')
     const [formDescription, setFormDescription] = useState('')
 
     const { data: activities = [], isLoading } = useLeadActivities(leadId, enterpriseId)
-    const { data: activityTypes = [] }         = useListActivityTypes(enterpriseId)
-    const { mutate: createActivity, isPending: creating }   = useCreateActivity()
-    const { mutate: updateActivity, isPending: updating }   = useUpdateActivity()
-    const { mutate: toggleActivity }                        = useToggleActivityComplete()
-    const { mutate: deleteActivity, isPending: deleting }   = useDeleteActivity()
+    const { data: activityTypes = [] } = useListActivityTypes(enterpriseId)
+    const { mutate: createActivity, isPending: creating } = useCreateActivity()
+    const { mutate: updateActivity, isPending: updating } = useUpdateActivity()
+    const { mutate: toggleActivity } = useToggleActivityComplete()
+    const { mutate: deleteActivity, isPending: deleting } = useDeleteActivity()
 
     function openCreate() {
         setEditActivity(null)
@@ -797,7 +796,7 @@ function AtividadesTab({ leadId, enterpriseId }: { leadId: string; enterpriseId:
     }
 
     const pending = activities.filter(a => !a.completed)
-    const done    = activities.filter(a => a.completed)
+    const done = activities.filter(a => a.completed)
 
     return (
         <div className="flex flex-col h-full">
@@ -1197,12 +1196,12 @@ function CustomFieldInput({
 
     const htmlType =
         field.fieldType === 'number' || field.fieldType === 'currency' ? 'number' :
-        field.fieldType === 'date' ? 'date' :
-        field.fieldType === 'datetime' ? 'datetime-local' :
-        field.fieldType === 'url' ? 'url' :
-        field.fieldType === 'phone' ? 'tel' :
-        field.fieldType === 'email' ? 'email' :
-        'text'
+            field.fieldType === 'date' ? 'date' :
+                field.fieldType === 'datetime' ? 'datetime-local' :
+                    field.fieldType === 'url' ? 'url' :
+                        field.fieldType === 'phone' ? 'tel' :
+                            field.fieldType === 'email' ? 'email' :
+                                'text'
 
     return (
         <div className="flex flex-col gap-1">
@@ -1235,14 +1234,14 @@ function LeadProfile({ lead, enterpriseId }: { lead: Lead; enterpriseId: string 
 
     const fileInputRef = useRef<HTMLInputElement>(null)
     const [editingName, setEditingName] = useState(false)
-    const [nameValue, setNameValue]     = useState(lead.name)
+    const [nameValue, setNameValue] = useState(lead.name)
     const [metricsOpen, setMetricsOpen] = useState(true)
-    const [notesOpen, setNotesOpen]     = useState(false)
-    const [noteText, setNoteText]       = useState('')
-    const [profileTab, setProfileTab]   = useState<ProfileSubTab>('perfil')
+    const [notesOpen, setNotesOpen] = useState(false)
+    const [noteText, setNoteText] = useState('')
+    const [profileTab, setProfileTab] = useState<ProfileSubTab>('perfil')
 
     // Crop modal
-    const [cropSrc, setCropSrc]         = useState<string | null>(null)
+    const [cropSrc, setCropSrc] = useState<string | null>(null)
 
     // Deals for metrics
     const { data: deals } = useLeadDeals(lead.id, enterpriseId)
@@ -1252,20 +1251,20 @@ function LeadProfile({ lead, enterpriseId }: { lead: Lead; enterpriseId: string 
     const [memberSearch, setMemberSearch] = useState('')
 
     // Editable field values
-    const [emailVal,      setEmailVal]      = useState(lead.email ?? '')
-    const [phoneVal,      setPhoneVal]      = useState(lead.phone ?? '')
-    const [empresaVal,    setEmpresaVal]    = useState(lead.empresa ?? '')
-    const [documentoVal,  setDocumentoVal]  = useState(applyDocMask(lead.documento ?? ''))
-    const [origemVal,     setOrigemVal]     = useState(lead.origem ?? '')
-    const [siteVal,       setSiteVal]       = useState(lead.site ?? '')
-    const [cepVal,        setCepVal]        = useState(applyCepMask(lead.cep ?? ''))
+    const [emailVal, setEmailVal] = useState(lead.email ?? '')
+    const [phoneVal, setPhoneVal] = useState(lead.phone ?? '')
+    const [empresaVal, setEmpresaVal] = useState(lead.empresa ?? '')
+    const [documentoVal, setDocumentoVal] = useState(applyDocMask(lead.documento ?? ''))
+    const [origemVal, setOrigemVal] = useState(lead.origem ?? '')
+    const [siteVal, setSiteVal] = useState(lead.site ?? '')
+    const [cepVal, setCepVal] = useState(applyCepMask(lead.cep ?? ''))
     const [logradouroVal, setLogradouroVal] = useState(lead.logradouro ?? '')
-    const [numeroVal,     setNumeroVal]     = useState(lead.numero ?? '')
-    const [complementoVal,setComplementoVal]= useState(lead.complemento ?? '')
-    const [bairroVal,     setBairroVal]     = useState(lead.bairro ?? '')
-    const [cidadeVal,     setCidadeVal]     = useState(lead.cidade ?? '')
-    const [ufVal,         setUfVal]         = useState(lead.uf ?? '')
-    const [paisVal,       setPaisVal]       = useState(lead.pais ?? 'Brasil')
+    const [numeroVal, setNumeroVal] = useState(lead.numero ?? '')
+    const [complementoVal, setComplementoVal] = useState(lead.complemento ?? '')
+    const [bairroVal, setBairroVal] = useState(lead.bairro ?? '')
+    const [cidadeVal, setCidadeVal] = useState(lead.cidade ?? '')
+    const [ufVal, setUfVal] = useState(lead.uf ?? '')
+    const [paisVal, setPaisVal] = useState(lead.pais ?? 'Brasil')
 
     const updateLead = useUpdateLead()
     const { data: members } = useMembers(enterpriseId)
@@ -1288,20 +1287,20 @@ function LeadProfile({ lead, enterpriseId }: { lead: Lead; enterpriseId: string 
     }
 
     // Sync field values when lead changes (e.g. after mutation refetch)
-    useEffect(() => { setEmailVal(lead.email ?? '') },      [lead.email])
-    useEffect(() => { setPhoneVal(lead.phone ?? '') },      [lead.phone])
-    useEffect(() => { setEmpresaVal(lead.empresa ?? '') },  [lead.empresa])
+    useEffect(() => { setEmailVal(lead.email ?? '') }, [lead.email])
+    useEffect(() => { setPhoneVal(lead.phone ?? '') }, [lead.phone])
+    useEffect(() => { setEmpresaVal(lead.empresa ?? '') }, [lead.empresa])
     useEffect(() => { setDocumentoVal(applyDocMask(lead.documento ?? '')) }, [lead.documento])
-    useEffect(() => { setOrigemVal(lead.origem ?? '') },    [lead.origem])
-    useEffect(() => { setSiteVal(lead.site ?? '') },        [lead.site])
+    useEffect(() => { setOrigemVal(lead.origem ?? '') }, [lead.origem])
+    useEffect(() => { setSiteVal(lead.site ?? '') }, [lead.site])
     useEffect(() => { setCepVal(applyCepMask(lead.cep ?? '')) }, [lead.cep])
-    useEffect(() => { setLogradouroVal(lead.logradouro ?? '')}, [lead.logradouro])
-    useEffect(() => { setNumeroVal(lead.numero ?? '') },    [lead.numero])
-    useEffect(() => { setComplementoVal(lead.complemento ?? '')}, [lead.complemento])
-    useEffect(() => { setBairroVal(lead.bairro ?? '') },    [lead.bairro])
-    useEffect(() => { setCidadeVal(lead.cidade ?? '') },    [lead.cidade])
-    useEffect(() => { setUfVal(lead.uf ?? '') },            [lead.uf])
-    useEffect(() => { setPaisVal(lead.pais ?? 'Brasil') },  [lead.pais])
+    useEffect(() => { setLogradouroVal(lead.logradouro ?? '') }, [lead.logradouro])
+    useEffect(() => { setNumeroVal(lead.numero ?? '') }, [lead.numero])
+    useEffect(() => { setComplementoVal(lead.complemento ?? '') }, [lead.complemento])
+    useEffect(() => { setBairroVal(lead.bairro ?? '') }, [lead.bairro])
+    useEffect(() => { setCidadeVal(lead.cidade ?? '') }, [lead.cidade])
+    useEffect(() => { setUfVal(lead.uf ?? '') }, [lead.uf])
+    useEffect(() => { setPaisVal(lead.pais ?? 'Brasil') }, [lead.pais])
 
     function saveName() {
         const trimmed = nameValue.trim()
@@ -1317,7 +1316,7 @@ function LeadProfile({ lead, enterpriseId }: { lead: Lead; enterpriseId: string 
     }
 
     function copyToClipboard(text: string) {
-        navigator.clipboard.writeText(text).catch(() => {})
+        navigator.clipboard.writeText(text).catch(() => { })
     }
 
     function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -1517,10 +1516,10 @@ function LeadProfile({ lead, enterpriseId }: { lead: Lead; enterpriseId: string 
                     {metricsOpen && (
                         <div className="px-4 pb-3 grid grid-cols-2 gap-2">
                             {[
-                                { label: 'Ticket médio',   value: formatBRL(avgTicket) },
-                                { label: 'Total',           value: formatBRL(totalValue) },
-                                { label: 'Dias como lead',  value: `${daysAsLead}d` },
-                                { label: 'Último negócio',  value: lastDealDays != null ? `${lastDealDays}d atrás` : '—' },
+                                { label: 'Ticket médio', value: formatBRL(avgTicket) },
+                                { label: 'Total', value: formatBRL(totalValue) },
+                                { label: 'Dias como lead', value: `${daysAsLead}d` },
+                                { label: 'Último negócio', value: lastDealDays != null ? `${lastDealDays}d atrás` : '—' },
                             ].map(({ label, value }) => (
                                 <div key={label} className="rounded-lg border bg-muted/20 px-3 py-2">
                                     <p className="text-[11px] text-muted-foreground leading-tight">{label}</p>
@@ -1562,18 +1561,17 @@ function LeadProfile({ lead, enterpriseId }: { lead: Lead; enterpriseId: string 
                 {/* Sub-tabs */}
                 <div className="flex border-b">
                     {([
-                        { key: 'perfil',   label: 'Perfil' },
+                        { key: 'perfil', label: 'Perfil' },
                         { key: 'endereco', label: 'Endereço' },
-                        { key: 'campos',   label: 'Campos' },
+                        { key: 'campos', label: 'Campos' },
                     ] as { key: ProfileSubTab; label: string }[]).map(({ key, label }) => (
                         <button
                             key={key}
                             onClick={() => setProfileTab(key)}
-                            className={`flex-1 py-2.5 text-xs font-medium border-b-2 transition-colors ${
-                                profileTab === key
-                                    ? 'border-primary text-primary'
-                                    : 'border-transparent text-muted-foreground hover:text-foreground'
-                            }`}
+                            className={`flex-1 py-2.5 text-xs font-medium border-b-2 transition-colors ${profileTab === key
+                                ? 'border-primary text-primary'
+                                : 'border-transparent text-muted-foreground hover:text-foreground'
+                                }`}
                         >
                             {label}
                         </button>
@@ -1860,10 +1858,10 @@ export function LeadSheet({ lead, enterpriseId, open, onOpenChange }: LeadSheetP
     }
 
     const mainTabs = [
-        { value: 'historico',    label: 'Histórico' },
-        { value: 'atividades',   label: 'Atividades' },
-        { value: 'negocios',     label: 'Negócios' },
-        { value: 'arquivos',     label: 'Arquivos' },
+        { value: 'historico', label: 'Histórico' },
+        { value: 'atividades', label: 'Atividades' },
+        { value: 'negocios', label: 'Negócios' },
+        { value: 'arquivos', label: 'Arquivos' },
         { value: 'atendimentos', label: 'Atendimentos' },
     ]
 

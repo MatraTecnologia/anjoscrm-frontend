@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import {
@@ -782,7 +783,7 @@ function AtividadesTab({ leadId, enterpriseId }: { leadId: string; enterpriseId:
     }
 
     function handleToggle(a: Activity) {
-        updateActivity({ id: a.id, enterpriseId, leadId: a.leadId, completed: !a.completed }, {
+        toggleActivity({ id: a.id, enterpriseId, leadId: a.leadId, completed: !a.completed }, {
             onError: (err: Error) => toast.error(err.message),
         })
     }

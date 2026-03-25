@@ -750,17 +750,16 @@ function AtividadesTab({ leadId, enterpriseId }: { leadId: string; enterpriseId:
         if (!formTitle.trim() || !formStartAt) return
 
         if (editActivity) {
-            // reuse updateActivity as a full update (toggle hook actually calls updateActivityFn)
-            // use the raw mutation from useToggleActivityComplete isn't right — use a dedicated one
-            // For simplicity, we call the same update endpoint:
-            updateActivity({ id: editActivity.id, enterpriseId, leadId, completed: editActivity.completed }, {
-                onSuccess: () => {
-                    // We can't update title/etc via toggleComplete — do via createActivity workaround
-                    // Note: in a real app we'd have useUpdateActivity exposed directly
-                    // For now, close and show a message — see services/activities.ts for useUpdateActivity
-                    toast.success('Atividade atualizada!')
-                    setCreateOpen(false)
-                },
+            updateActivity({
+                id: editActivity.id,
+                enterpriseId,
+                title: formTitle.trim(),
+                typeId: formTypeId || null,
+                startAt: new Date(formStartAt).toISOString(),
+                endAt: formEndAt ? new Date(formEndAt).toISOString() : null,
+                description: formDescription.trim() || null,
+            }, {
+                onSuccess: () => { toast.success('Atividade atualizada!'); setCreateOpen(false) },
                 onError: (err: Error) => toast.error(err.message),
             })
         } else {

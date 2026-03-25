@@ -85,7 +85,6 @@ function formatBRL(val: string | number | null) {
 // ─── Tipos locais ─────────────────────────────────────────────────────────────
 
 type Sort = 'recent' | 'value_desc' | 'value_asc' | 'alpha'
-type Tab = 'recent' | 'interval' | 'lastyear'
 
 const SORT_LABELS: Record<Sort, string> = {
     recent: 'Mais recentes',
@@ -2122,7 +2121,6 @@ export default function PipelinePage() {
 
     const [view, setView] = useState<'pipeline' | 'followup'>('pipeline')
     const [sort, setSort] = useState<Sort>('recent')
-    const [activeTab, setActiveTab] = useState<Tab>('recent')
     const [activeDeal, setActiveDeal] = useState<Deal | null>(null)
     const [chatLead, setChatLead] = useState<DealLead | null>(null)
     const [search, setSearch] = useState('')
@@ -2211,38 +2209,79 @@ export default function PipelinePage() {
         )
     }
 
-    const tabs: { id: Tab; label: string }[] = [
-        { id: 'recent', label: 'Mais recentes' },
-        { id: 'interval', label: 'Intervalo' },
-        { id: 'lastyear', label: 'Último ano' },
-    ]
+    const { data: allTagsPage = [] } = useListTags(enterpriseId)
+    const { data: allMembers = [] } = useMembers(enterpriseId)
 
     return (
         <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
             {/* Header */}
             <div className="flex items-center justify-between gap-4 px-5 py-3 border-b flex-shrink-0">
-                <div className="flex items-center gap-6">
-                    <div>
+                <div className="flex items-center gap-4 min-w-0">
+                    <div className="flex-shrink-0">
                         <h1 className="text-base font-semibold leading-tight">{pipeline.name}</h1>
-                        <p className="text-xs text-muted-foreground">Funil de vendas</p>
+                        <p className="text-xs text-muted-foreground">{pipeline.description ?? 'Funil de vendas'}</p>
                     </div>
-                    <div className="flex items-center gap-0.5 bg-muted/40 rounded-lg border p-0.5">
-                        {tabs.map((tab) => (
-                            <button
-                                key={tab.id}
-                                onClick={() => setActiveTab(tab.id)}
-                                className={cn(
-                                    'px-3 py-1 rounded-md text-xs font-medium transition-colors',
-                                    activeTab === tab.id
-                                        ? 'bg-background text-foreground shadow-sm'
-                                        : 'text-muted-foreground hover:text-foreground',
-                                )}
-                            >
-                                {tab.label}
-                            </button>
-                        ))}
-                    </div>
-                    <div className="flex items-center gap-0.5 bg-muted/40 rounded-lg border p-0.5">
+
+                    {/* Chips de filtros ativos */}
+                    {(search || activeFilterCount > 0) && (
+                        <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                            {search && (
+                                <span className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 bg-muted border rounded-full text-[11px] text-foreground flex-shrink-0">
+                                    <Search className="size-2.5 text-muted-foreground" />
+                                    <span className="max-w-24 truncate">&quot;{search}&quot;</span>
+                                    <button onClick={() => setSearch('')} className="p-0.5 rounded-full hover:bg-muted-foreground/20 text-muted-foreground hover:text-foreground transition-colors">
+                                        <X className="size-2.5" />
+                                    </button>
+                                </span>
+                            )}
+                            {filters.tagIds.map(tagId => {
+                                const tag = allTagsPage.find(t => t.id === tagId)
+                                if (!tag) return null
+                                return (
+                                    <span
+                                        key={tagId}
+                                        className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-[11px] flex-shrink-0"
+                                        style={{ backgroundColor: tag.color + '22', color: tag.color, border: `1px solid ${tag.color}55` }}
+                                    >
+                                        {tag.name}
+                                        <button
+                                            onClick={() => setFilters(p => ({ ...p, tagIds: p.tagIds.filter(t => t !== tagId) }))}
+                                            className="p-0.5 rounded-full hover:bg-black/10 transition-colors"
+                                        >
+                                            <X className="size-2.5" />
+                                        </button>
+                                    </span>
+                                )
+                            })}
+                            {filters.assigneeId && (() => {
+                                const member = allMembers.find(m => m.user.id === filters.assigneeId)
+                                return member ? (
+                                    <span className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 bg-muted border rounded-full text-[11px] flex-shrink-0">
+                                        <User className="size-2.5 text-muted-foreground" />
+                                        <span className="max-w-20 truncate">{member.user.name}</span>
+                                        <button onClick={() => setFilters(p => ({ ...p, assigneeId: null }))} className="p-0.5 rounded-full hover:bg-muted-foreground/20 text-muted-foreground hover:text-foreground transition-colors">
+                                            <X className="size-2.5" />
+                                        </button>
+                                    </span>
+                                ) : null
+                            })()}
+                            {(filters.minValue || filters.maxValue) && (
+                                <span className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 bg-muted border rounded-full text-[11px] flex-shrink-0">
+                                    <Banknote className="size-2.5 text-muted-foreground" />
+                                    <span>
+                                        {filters.minValue && `≥ R$${filters.minValue}`}
+                                        {filters.minValue && filters.maxValue && ' · '}
+                                        {filters.maxValue && `≤ R$${filters.maxValue}`}
+                                    </span>
+                                    <button onClick={() => setFilters(p => ({ ...p, minValue: '', maxValue: '' }))} className="p-0.5 rounded-full hover:bg-muted-foreground/20 text-muted-foreground hover:text-foreground transition-colors">
+                                        <X className="size-2.5" />
+                                    </button>
+                                </span>
+                            )}
+                        </div>
+                    )}
+
+                    <div className="flex items-center gap-0.5 bg-muted/40 rounded-lg border p-0.5 flex-shrink-0">
                         <button
                             onClick={() => setView('pipeline')}
                             className={cn(

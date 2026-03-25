@@ -11,7 +11,7 @@ import {
     SlidersHorizontal, MessageSquarePlus, Send, Tag,
     ShoppingCart, MoreHorizontal, Check, Clock, X,
     Camera, Copy, ExternalLink, Calendar, CheckCircle2, Circle,
-    Activity,
+    Activity as ActivityIcon,
 } from 'lucide-react'
 import type { Value as PhoneValue } from 'react-phone-number-input'
 import Cropper from 'react-easy-crop'
@@ -203,7 +203,7 @@ function TimelineIcon({ action }: { action: string }) {
     if (action === 'lead.updated') return <span className={`${base} bg-blue-500`}><Pencil className="size-4" /></span>
     if (action === 'lead.tag_added' || action === 'lead.tag_removed') return <span className={`${base} bg-blue-500`}><Tag className="size-4" /></span>
     if (action === 'comment.added') return <span className={`${base} bg-purple-500`}><MessageCircle className="size-4" /></span>
-    return <span className={`${base} bg-muted-foreground`}><Activity className="size-4" /></span>
+    return <span className={`${base} bg-muted-foreground`}><ActivityIcon className="size-4" /></span>
 }
 
 // ─── Timeline item ────────────────────────────────────────────────────────────

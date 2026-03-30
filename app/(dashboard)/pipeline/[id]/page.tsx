@@ -24,7 +24,7 @@ import {
     MessageCircle, ChevronDown, Trash2, ArrowLeft, UserPlus,
     Pencil, Trophy, XCircle, User, Send, X, Check, WifiOff,
     Package, Minus, LayoutGrid, Clock, Settings2, Trash,
-    AlertCircle, Copy, Link2, ArrowLeftRight,
+    AlertCircle, Copy, Link2, ArrowLeftRight, Zap,
 } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
@@ -66,6 +66,7 @@ import { useListTags } from '@/services/tags'
 import { useConnections } from '@/services/connections'
 import { useMessages, useSendMessage, useChatSocket } from '@/services/chat'
 import { keys } from '@/lib/keys'
+import { CadenceConfigSheet } from '@/components/cadence-config-sheet'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1319,6 +1320,7 @@ function KanbanColumn({
     const { setNodeRef: setDropRef, isOver } = useDroppable({ id: stage.id })
     const deleteStage = useDeleteStage()
     const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
+    const [cadenceOpen, setCadenceOpen] = useState(false)
 
     const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
         useStageDeals(stage.id, enterpriseId, sort)
@@ -1415,7 +1417,15 @@ function KanbanColumn({
                                 <MoreHorizontal className="size-3.5 text-muted-foreground" />
                             </button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-44">
+                        <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuItem
+                                className="text-xs"
+                                onClick={() => setCadenceOpen(true)}
+                            >
+                                <Zap className="size-3.5 mr-2 text-amber-500" />
+                                Configurar cadência
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
                             <DropdownMenuItem
                                 className="text-destructive focus:text-destructive text-xs"
                                 onClick={handleDeleteStage}
@@ -1430,6 +1440,14 @@ function KanbanColumn({
                     {formatBRL(totalValue)}
                 </div>
             </div>
+
+            <CadenceConfigSheet
+                open={cadenceOpen}
+                onOpenChange={setCadenceOpen}
+                stageId={stage.id}
+                stageName={stage.name}
+                enterpriseId={enterpriseId}
+            />
 
             <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
                 <AlertDialogContent>

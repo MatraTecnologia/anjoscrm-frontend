@@ -17,7 +17,7 @@ import {
     Clock,
     Activity,
     Plug,
-
+    KeyRound,
     HardDrive,
     ChevronLeft,
     ChevronRight,
@@ -39,7 +39,8 @@ const settingsNav = [
     { href: '/settings/activity-types', icon: Activity, label: 'Tipos de atividades' },
     { href: "/settings/history-all", icon: Activity, label: "Histórico" },
     { href: '/settings/storage', icon: HardDrive, label: 'Armazenamento' },
-    { href: '/settings/integrations', icon: Plug, label: 'Integrações' }
+    { href: '/settings/integrations', icon: Plug, label: 'Integrações' },
+    { href: '/settings/credentials', icon: KeyRound, label: 'Credenciais' },
 ]
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {

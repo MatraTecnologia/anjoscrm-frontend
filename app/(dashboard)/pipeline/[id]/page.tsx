@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState, useEffect, useMemo } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
@@ -24,7 +24,7 @@ import {
     MessageCircle, ChevronDown, Trash2, ArrowLeft, UserPlus,
     Pencil, Trophy, XCircle, User, Send, X, Check, WifiOff,
     Package, Minus, LayoutGrid, Clock, Settings2, Trash,
-    AlertCircle,
+    AlertCircle, Copy, Link2, ArrowLeftRight,
 } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
@@ -33,6 +33,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import {
     DropdownMenu, DropdownMenuContent, DropdownMenuItem,
     DropdownMenuSeparator, DropdownMenuTrigger,
@@ -48,7 +49,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useEnterprise } from '@/hooks/use-enterprise'
 import { usePipelineSocket } from '@/hooks/use-pipeline-socket'
 import {
-    useGetPipeline, useGetStageFollowUpConfig, useUpsertStageFollowUpConfig, useGetPipelineFollowUpBoard,
+    useGetPipeline, useUpdatePipeline, useDeletePipeline, useGetBilateralConfig,
+    useGetStageFollowUpConfig, useUpsertStageFollowUpConfig, useGetPipelineFollowUpBoard,
     useCreateStage, useDeleteStage,
     type PipelineStage, type StageFollowUpConfig, type FollowUpAction, type FollowUpActionType, type FollowUpStep, type FollowUpBoardDeal,
 } from '@/services/pipelines'
@@ -2172,12 +2174,66 @@ function FilterSheet({
 export default function PipelinePage() {
     const { id } = useParams<{ id: string }>()
     const { enterprise } = useEnterprise()
+    const router = useRouter()
     const enterpriseId = enterprise?.id ?? ''
 
     const { data: pipeline, isLoading } = useGetPipeline(id, enterpriseId)
     const updateDeal = useUpdateDeal()
     const deleteDeal = useDeleteDeal()
     const createStage = useCreateStage()
+    const updatePipeline = useUpdatePipeline()
+    const deletePipeline = useDeletePipeline()
+
+    // Edit pipeline state
+    const [editOpen, setEditOpen] = useState(false)
+    const [editName, setEditName] = useState('')
+    const [editColor, setEditColor] = useState('#6366f1')
+    const [editDesc, setEditDesc] = useState('')
+
+    // Webhook dialog state
+    const [webhookOpen, setWebhookOpen] = useState(false)
+    const [webhookCopied, setWebhookCopied] = useState(false)
+
+    const { data: bilateralConfig, isLoading: bilateralLoading } = useGetBilateralConfig(
+        webhookOpen ? id : '',
+        enterpriseId,
+    )
+
+    function handleOpenEdit() {
+        if (!pipeline) return
+        setEditName(pipeline.name)
+        setEditColor(pipeline.color)
+        setEditDesc(pipeline.description ?? '')
+        setEditOpen(true)
+    }
+
+    function handleSaveEdit() {
+        if (!enterpriseId || !editName.trim()) return
+        updatePipeline.mutate(
+            { id, enterpriseId, name: editName.trim(), color: editColor, description: editDesc.trim() || undefined },
+            {
+                onSuccess: () => {
+                    setEditOpen(false)
+                    toast.success('Pipeline atualizada.')
+                },
+                onError: (e) => toast.error(e.message),
+            },
+        )
+    }
+
+    function handleDeletePipeline() {
+        if (!enterpriseId) return
+        deletePipeline.mutate(
+            { id, enterpriseId },
+            {
+                onSuccess: () => {
+                    toast.success('Pipeline excluída.')
+                    router.push('/pipeline')
+                },
+                onError: (e) => toast.error(e.message),
+            },
+        )
+    }
     const { data: allTagsPage = [] } = useListTags(enterpriseId)
     const { data: allMembers = [] } = useMembers(enterpriseId)
 
@@ -2443,9 +2499,27 @@ export default function PipelinePage() {
                             ))}
                         </DropdownMenuContent>
                     </DropdownMenu>
-                    <button className="p-1.5 border rounded-md hover:bg-muted transition-colors">
-                        <MoreHorizontal className="size-3.5 text-muted-foreground" />
-                    </button>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <button className="p-1.5 border rounded-md hover:bg-muted transition-colors">
+                                <MoreHorizontal className="size-3.5 text-muted-foreground" />
+                            </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-44">
+                            <DropdownMenuItem onClick={handleOpenEdit}>
+                                <Pencil className="size-3.5 mr-2" /> Editar pipeline
+                            </DropdownMenuItem>
+                            {pipeline.isBilateral && (
+                                <DropdownMenuItem onClick={() => setWebhookOpen(true)}>
+                                    <Link2 className="size-3.5 mr-2" /> Ver webhook
+                                </DropdownMenuItem>
+                            )}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={handleDeletePipeline}>
+                                <Trash2 className="size-3.5 mr-2" /> Excluir pipeline
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </div>
             </div>
 
@@ -2567,6 +2641,88 @@ export default function PipelinePage() {
                 onApply={setFilters}
                 enterpriseId={enterpriseId}
             />
+
+            {/* Edit Pipeline Dialog */}
+            <Dialog open={editOpen} onOpenChange={setEditOpen}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Editar pipeline</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-2">
+                        <div className="space-y-1.5">
+                            <Label>Nome</Label>
+                            <Input value={editName} onChange={e => setEditName(e.target.value)} placeholder="Nome da pipeline" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>Cor</Label>
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="color"
+                                    value={editColor}
+                                    onChange={e => setEditColor(e.target.value)}
+                                    className="h-8 w-10 cursor-pointer rounded border bg-transparent p-0.5"
+                                />
+                                <Input value={editColor} onChange={e => setEditColor(e.target.value)} className="font-mono text-xs" />
+                            </div>
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>Descrição <span className="text-muted-foreground">(opcional)</span></Label>
+                            <Textarea value={editDesc} onChange={e => setEditDesc(e.target.value)} placeholder="Descreva o objetivo desta pipeline..." rows={3} />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setEditOpen(false)}>Cancelar</Button>
+                        <Button onClick={handleSaveEdit} disabled={updatePipeline.isPending || !editName.trim()}>
+                            {updatePipeline.isPending ? <Loader2 className="size-3.5 animate-spin mr-2" /> : null}
+                            Salvar
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Webhook Dialog */}
+            <Dialog open={webhookOpen} onOpenChange={setWebhookOpen}>
+                <DialogContent className="sm:max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <ArrowLeftRight className="size-4" /> Integração Kommo — Webhook
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-2">
+                        <p className="text-sm text-muted-foreground">
+                            Configure esta URL no Kommo em <strong>Configurações → Webhooks → Adicionar URL</strong> para ativar a sincronização bidirecional.
+                        </p>
+                        {bilateralLoading ? (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <Loader2 className="size-3.5 animate-spin" /> Carregando...
+                            </div>
+                        ) : bilateralConfig?.webhookUrl ? (
+                            <div className="space-y-1.5">
+                                <Label>URL do Webhook</Label>
+                                <div className="flex items-center gap-2">
+                                    <Input readOnly value={bilateralConfig.webhookUrl} className="font-mono text-xs" />
+                                    <Button
+                                        size="icon"
+                                        variant="outline"
+                                        onClick={() => {
+                                            navigator.clipboard.writeText(bilateralConfig.webhookUrl!)
+                                            setWebhookCopied(true)
+                                            setTimeout(() => setWebhookCopied(false), 2000)
+                                        }}
+                                    >
+                                        {webhookCopied ? <Check className="size-3.5 text-green-600" /> : <Copy className="size-3.5" />}
+                                    </Button>
+                                </div>
+                            </div>
+                        ) : (
+                            <p className="text-sm text-muted-foreground">Webhook não configurado para esta pipeline.</p>
+                        )}
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setWebhookOpen(false)}>Fechar</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

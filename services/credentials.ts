@@ -14,9 +14,9 @@ export type Credential = {
     type: CredentialType
     name: string
     isActive: boolean
-    maskedKey?: string     // OpenAI: chave mascarada (sk-...****)
-    maskedToken?: string   // OAuth: access token mascarado
-    domain?: string        // Kommo: subdomínio da conta
+    maskedKey?: string        // OpenAI
+    maskedToken?: string      // Kommo / RD Station
+    subdomain?: string        // Kommo
     expiresAt?: string | null
     lastRefreshedAt?: string | null
     createdAt: string
@@ -25,65 +25,54 @@ export type Credential = {
 
 // ─── API functions ────────────────────────────────────────────────────────────
 
+const h = (enterpriseId: string) => ({ headers: { 'X-Enterprise-Id': enterpriseId } })
+
 async function listCredentials(enterpriseId: string): Promise<Credential[]> {
-    const { data } = await api.get<Credential[]>(`/credentials/${enterpriseId}`, {
-        headers: { 'X-Enterprise-Id': enterpriseId },
-    })
+    const { data } = await api.get<Credential[]>(`/credentials/${enterpriseId}`, h(enterpriseId))
     return data
 }
 
-async function createOpenAI(
+async function saveOpenAI(enterpriseId: string, payload: { name?: string; apiKey: string }): Promise<Credential> {
+    const { data } = await api.post<Credential>(`/credentials/${enterpriseId}/openai`, payload, h(enterpriseId))
+    return data
+}
+
+async function saveKommo(
     enterpriseId: string,
-    payload: { name: string; apiKey: string }
+    payload: { subdomain: string; accessToken: string; name?: string; expiresAt?: string }
 ): Promise<Credential> {
-    const { data } = await api.post<Credential>(`/credentials/${enterpriseId}/openai`, payload, {
-        headers: { 'X-Enterprise-Id': enterpriseId },
-    })
+    const { data } = await api.post<Credential>(`/credentials/${enterpriseId}/kommo`, payload, h(enterpriseId))
+    return data
+}
+
+async function saveRDStation(
+    enterpriseId: string,
+    payload: { accessToken: string; name?: string; expiresAt?: string }
+): Promise<Credential> {
+    const { data } = await api.post<Credential>(`/credentials/${enterpriseId}/rdstation`, payload, h(enterpriseId))
+    return data
+}
+
+async function deleteCredential(enterpriseId: string, id: string): Promise<void> {
+    await api.delete(`/credentials/${enterpriseId}/${id}`, h(enterpriseId))
+}
+
+async function toggleCredential(enterpriseId: string, id: string): Promise<Credential> {
+    const { data } = await api.patch<Credential>(`/credentials/${enterpriseId}/${id}/toggle`, {}, h(enterpriseId))
+    return data
+}
+
+async function renewCredential(enterpriseId: string, id: string): Promise<Credential> {
+    const { data } = await api.patch<Credential>(`/credentials/${enterpriseId}/${id}/renew`, {}, h(enterpriseId))
     return data
 }
 
 async function updateCredential(
     enterpriseId: string,
     id: string,
-    payload: { name?: string; apiKey?: string }
+    payload: { name?: string; apiKey?: string; accessToken?: string; subdomain?: string; expiresAt?: string | null }
 ): Promise<Credential> {
-    const { data } = await api.patch<Credential>(`/credentials/${enterpriseId}/${id}`, payload, {
-        headers: { 'X-Enterprise-Id': enterpriseId },
-    })
-    return data
-}
-
-async function deleteCredential(enterpriseId: string, id: string): Promise<void> {
-    await api.delete(`/credentials/${enterpriseId}/${id}`, {
-        headers: { 'X-Enterprise-Id': enterpriseId },
-    })
-}
-
-async function toggleCredential(enterpriseId: string, id: string): Promise<Credential> {
-    const { data } = await api.patch<Credential>(`/credentials/${enterpriseId}/${id}/toggle`, {}, {
-        headers: { 'X-Enterprise-Id': enterpriseId },
-    })
-    return data
-}
-
-async function refreshCredential(enterpriseId: string, id: string): Promise<Credential> {
-    const { data } = await api.post<Credential>(`/credentials/${enterpriseId}/${id}/refresh`, {}, {
-        headers: { 'X-Enterprise-Id': enterpriseId },
-    })
-    return data
-}
-
-async function getKommoAuthUrl(enterpriseId: string): Promise<{ url: string }> {
-    const { data } = await api.get<{ url: string }>(`/credentials/${enterpriseId}/kommo/auth-url`, {
-        headers: { 'X-Enterprise-Id': enterpriseId },
-    })
-    return data
-}
-
-async function getRDStationAuthUrl(enterpriseId: string): Promise<{ url: string }> {
-    const { data } = await api.get<{ url: string }>(`/credentials/${enterpriseId}/rdstation/auth-url`, {
-        headers: { 'X-Enterprise-Id': enterpriseId },
-    })
+    const { data } = await api.patch<Credential>(`/credentials/${enterpriseId}/${id}`, payload, h(enterpriseId))
     return data
 }
 
@@ -97,73 +86,89 @@ export function useCredentials(enterpriseId: string) {
     })
 }
 
-export function useCreateOpenAI() {
-    const queryClient = useQueryClient()
+export function useSaveOpenAI() {
+    const qc = useQueryClient()
     return useMutation({
-        mutationFn: ({ enterpriseId, name, apiKey }: { enterpriseId: string; name: string; apiKey: string }) =>
-            createOpenAI(enterpriseId, { name, apiKey }),
-        onSuccess: (_, { enterpriseId }) => {
-            queryClient.invalidateQueries({ queryKey: keys.credentials.all(enterpriseId) })
-        },
+        mutationFn: ({ enterpriseId, ...rest }: { enterpriseId: string; name?: string; apiKey: string }) =>
+            saveOpenAI(enterpriseId, rest),
+        onSuccess: (_, { enterpriseId }) =>
+            qc.invalidateQueries({ queryKey: keys.credentials.all(enterpriseId) }),
     })
 }
 
-export function useUpdateCredential() {
-    const queryClient = useQueryClient()
+export function useSaveKommo() {
+    const qc = useQueryClient()
     return useMutation({
         mutationFn: ({
             enterpriseId,
-            id,
-            ...payload
-        }: { enterpriseId: string; id: string; name?: string; apiKey?: string }) =>
-            updateCredential(enterpriseId, id, payload),
-        onSuccess: (_, { enterpriseId }) => {
-            queryClient.invalidateQueries({ queryKey: keys.credentials.all(enterpriseId) })
-        },
+            ...rest
+        }: { enterpriseId: string; subdomain: string; accessToken: string; name?: string; expiresAt?: string }) =>
+            saveKommo(enterpriseId, rest),
+        onSuccess: (_, { enterpriseId }) =>
+            qc.invalidateQueries({ queryKey: keys.credentials.all(enterpriseId) }),
+    })
+}
+
+export function useSaveRDStation() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: ({
+            enterpriseId,
+            ...rest
+        }: { enterpriseId: string; accessToken: string; name?: string; expiresAt?: string }) =>
+            saveRDStation(enterpriseId, rest),
+        onSuccess: (_, { enterpriseId }) =>
+            qc.invalidateQueries({ queryKey: keys.credentials.all(enterpriseId) }),
     })
 }
 
 export function useDeleteCredential() {
-    const queryClient = useQueryClient()
+    const qc = useQueryClient()
     return useMutation({
         mutationFn: ({ enterpriseId, id }: { enterpriseId: string; id: string }) =>
             deleteCredential(enterpriseId, id),
-        onSuccess: (_, { enterpriseId }) => {
-            queryClient.invalidateQueries({ queryKey: keys.credentials.all(enterpriseId) })
-        },
+        onSuccess: (_, { enterpriseId }) =>
+            qc.invalidateQueries({ queryKey: keys.credentials.all(enterpriseId) }),
     })
 }
 
 export function useToggleCredential() {
-    const queryClient = useQueryClient()
+    const qc = useQueryClient()
     return useMutation({
         mutationFn: ({ enterpriseId, id }: { enterpriseId: string; id: string }) =>
             toggleCredential(enterpriseId, id),
-        onSuccess: (_, { enterpriseId }) => {
-            queryClient.invalidateQueries({ queryKey: keys.credentials.all(enterpriseId) })
-        },
+        onSuccess: (_, { enterpriseId }) =>
+            qc.invalidateQueries({ queryKey: keys.credentials.all(enterpriseId) }),
     })
 }
 
-export function useRefreshCredential() {
-    const queryClient = useQueryClient()
+export function useRenewCredential() {
+    const qc = useQueryClient()
     return useMutation({
         mutationFn: ({ enterpriseId, id }: { enterpriseId: string; id: string }) =>
-            refreshCredential(enterpriseId, id),
-        onSuccess: (_, { enterpriseId }) => {
-            queryClient.invalidateQueries({ queryKey: keys.credentials.all(enterpriseId) })
-        },
+            renewCredential(enterpriseId, id),
+        onSuccess: (_, { enterpriseId }) =>
+            qc.invalidateQueries({ queryKey: keys.credentials.all(enterpriseId) }),
     })
 }
 
-export function useKommoAuthUrl(enterpriseId: string) {
+export function useUpdateCredential() {
+    const qc = useQueryClient()
     return useMutation({
-        mutationFn: () => getKommoAuthUrl(enterpriseId),
-    })
-}
-
-export function useRDStationAuthUrl(enterpriseId: string) {
-    return useMutation({
-        mutationFn: () => getRDStationAuthUrl(enterpriseId),
+        mutationFn: ({
+            enterpriseId,
+            id,
+            ...rest
+        }: {
+            enterpriseId: string
+            id: string
+            name?: string
+            apiKey?: string
+            accessToken?: string
+            subdomain?: string
+            expiresAt?: string | null
+        }) => updateCredential(enterpriseId, id, rest),
+        onSuccess: (_, { enterpriseId }) =>
+            qc.invalidateQueries({ queryKey: keys.credentials.all(enterpriseId) }),
     })
 }

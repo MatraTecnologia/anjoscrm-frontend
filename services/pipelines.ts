@@ -30,6 +30,29 @@ export type Pipeline = {
     createdAt: string
     stages: PipelineStage[]
     _count?: { stages: number; deals: number }
+    isBilateral?: boolean
+    kommoCredentialId?: string | null
+    webhookToken?: string | null
+}
+
+export type BilateralConfig = {
+    isBilateral: boolean
+    kommoCredentialId: string | null
+    kommoPipelineId: number | null
+    webhookToken: string | null
+    webhookUrl: string | null
+}
+
+export type KommoPipelineStatus = {
+    id: number
+    name: string
+    color: string
+}
+
+export type KommoPipelineOption = {
+    id: number
+    name: string
+    statuses: KommoPipelineStatus[]
 }
 
 export type PipelineGroup = {
@@ -208,6 +231,7 @@ async function createStageFn({
     color,
     description,
     aiInstructions,
+    kommoStatusId,
 }: {
     pipelineId: string
     enterpriseId: string
@@ -215,10 +239,11 @@ async function createStageFn({
     color?: string
     description?: string
     aiInstructions?: string
+    kommoStatusId?: number
 }): Promise<PipelineStage> {
     const { data } = await api.post<PipelineStage>(
         `/pipelines/${pipelineId}/stages`,
-        { name, color, description, aiInstructions },
+        { name, color, description, aiInstructions, kommoStatusId },
         { headers: { 'X-Enterprise-Id': enterpriseId } },
     )
     return data
@@ -526,5 +551,93 @@ export function useGetPipelineFollowUpBoard(pipelineId: string, enterpriseId: st
         queryFn: () => getPipelineFollowUpBoardFn(pipelineId, enterpriseId),
         enabled: !!pipelineId && !!enterpriseId,
         refetchInterval: 60000, // atualiza a cada minuto
+    })
+}
+
+// ─── API — Bilateral Kommo ────────────────────────────────────────────────────
+
+async function getBilateralConfigFn(pipelineId: string, enterpriseId: string): Promise<BilateralConfig> {
+    const { data } = await api.get<BilateralConfig>(
+        `/pipelines/${pipelineId}/bilateral`,
+        { headers: { 'X-Enterprise-Id': enterpriseId } },
+    )
+    return data
+}
+
+async function activateBilateralFn({
+    pipelineId,
+    enterpriseId,
+    kommoCredentialId,
+    kommoPipelineId,
+}: {
+    pipelineId: string
+    enterpriseId: string
+    kommoCredentialId: string
+    kommoPipelineId?: number | null
+}): Promise<BilateralConfig> {
+    const { data } = await api.post<BilateralConfig>(
+        `/pipelines/${pipelineId}/bilateral`,
+        { kommoCredentialId, ...(kommoPipelineId != null && { kommoPipelineId }) },
+        { headers: { 'X-Enterprise-Id': enterpriseId } },
+    )
+    return data
+}
+
+async function listKommoPipelinesFn(credentialId: string, enterpriseId: string): Promise<KommoPipelineOption[]> {
+    const { data } = await api.get<KommoPipelineOption[]>(
+        `/pipelines/bilateral/kommo-pipelines?credentialId=${credentialId}`,
+        { headers: { 'X-Enterprise-Id': enterpriseId } },
+    )
+    return data
+}
+
+async function deactivateBilateralFn({
+    pipelineId,
+    enterpriseId,
+}: {
+    pipelineId: string
+    enterpriseId: string
+}): Promise<void> {
+    await api.delete(`/pipelines/${pipelineId}/bilateral`, {
+        headers: { 'X-Enterprise-Id': enterpriseId },
+    })
+}
+
+// ─── Hooks — Bilateral ────────────────────────────────────────────────────────
+
+export function useGetBilateralConfig(pipelineId: string, enterpriseId: string) {
+    return useQuery({
+        queryKey: ['pipelines', pipelineId, 'bilateral'],
+        queryFn: () => getBilateralConfigFn(pipelineId, enterpriseId),
+        enabled: !!pipelineId && !!enterpriseId,
+    })
+}
+
+export function useActivateBilateral() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: activateBilateralFn,
+        onSuccess: (_data, { pipelineId }) => {
+            qc.invalidateQueries({ queryKey: ['pipelines', pipelineId, 'bilateral'] })
+        },
+    })
+}
+
+export function useDeactivateBilateral() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: deactivateBilateralFn,
+        onSuccess: (_data, { pipelineId }) => {
+            qc.invalidateQueries({ queryKey: ['pipelines', pipelineId, 'bilateral'] })
+        },
+    })
+}
+
+export function useKommoPipelines(credentialId: string | null, enterpriseId: string) {
+    return useQuery({
+        queryKey: ['kommo-pipelines', credentialId],
+        queryFn: () => listKommoPipelinesFn(credentialId!, enterpriseId),
+        enabled: !!credentialId && credentialId !== 'none' && !!enterpriseId,
+        staleTime: 60_000,
     })
 }

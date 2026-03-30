@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import {
     Plus, Loader2, Trash2, MoreHorizontal, ChevronDown, ChevronRight,
-    GripVertical, FolderPlus, X,
+    GripVertical, FolderPlus, X, Copy, Check, ArrowLeftRight, Pencil, Link2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -24,6 +24,7 @@ import { Label } from '@/components/ui/label'
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
+import { Switch } from '@/components/ui/switch'
 import {
     DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
@@ -35,15 +36,17 @@ import { useEnterprise } from '@/hooks/use-enterprise'
 import {
     useListGroups, useListPipelines,
     useCreateGroup, useDeleteGroup, useReorderGroups,
-    useCreatePipeline, useDeletePipeline, useReorderPipelines,
+    useCreatePipeline, useUpdatePipeline, useDeletePipeline, useReorderPipelines,
     useCreateStage, useDeleteStage,
+    useActivateBilateral, useGetBilateralConfig, useKommoPipelines,
     type PipelineGroup, type Pipeline, type PipelineStage,
 } from '@/services/pipelines'
+import { useCredentials } from '@/services/credentials'
 import { api } from '@/lib/api'
 
 // ─── Stage helpers ────────────────────────────────────────────────────────────
 
-type StageItem = { tempId: string; name: string; color: string }
+type StageItem = { tempId: string; name: string; color: string; kommoStatusId?: number }
 
 const DEFAULT_PIPELINE_STAGES: StageItem[] = [
     { tempId: 'def-0', name: 'Prospecção', color: '#6b7280' },
@@ -70,12 +73,14 @@ function FunnelIcon({ color }: { color: string }) {
 // ─── Sortable Pipeline Item ────────────────────────────────────────────────────
 
 function SortablePipelineItem({
-    pipeline, groupId, selectedId, onDelete,
+    pipeline, groupId, selectedId, onDelete, onEdit, onWebhook,
 }: {
     pipeline: Pipeline
     groupId: string | null
     selectedId?: string
     onDelete: (p: Pipeline) => void
+    onEdit: (p: Pipeline) => void
+    onWebhook: (p: Pipeline) => void
 }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         id: pipeline.id,
@@ -111,7 +116,17 @@ function SortablePipelineItem({
                         <MoreHorizontal className="size-3.5" />
                     </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-36">
+                <DropdownMenuContent align="end" className="w-40">
+                    <DropdownMenuItem onClick={() => onEdit(pipeline)}>
+                        <Pencil className="size-3.5 mr-2" />
+                        Editar
+                    </DropdownMenuItem>
+                    {pipeline.isBilateral && (
+                        <DropdownMenuItem onClick={() => onWebhook(pipeline)}>
+                            <Link2 className="size-3.5 mr-2" />
+                            Ver webhook
+                        </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem
                         className="text-red-600 focus:text-red-600"
                         onClick={() => onDelete(pipeline)}
@@ -128,7 +143,7 @@ function SortablePipelineItem({
 // ─── Sortable Group ────────────────────────────────────────────────────────────
 
 function SortableGroup({
-    group, isExpanded, onToggle, selectedId, onDeletePipeline, onDeleteGroup,
+    group, isExpanded, onToggle, selectedId, onDeletePipeline, onDeleteGroup, onEditPipeline, onWebhookPipeline,
 }: {
     group: PipelineGroup
     isExpanded: boolean
@@ -136,6 +151,8 @@ function SortableGroup({
     selectedId?: string
     onDeletePipeline: (p: Pipeline) => void
     onDeleteGroup: (g: PipelineGroup) => void
+    onEditPipeline: (p: Pipeline) => void
+    onWebhookPipeline: (p: Pipeline) => void
 }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         id: `group-${group.id}`,
@@ -207,6 +224,8 @@ function SortableGroup({
                                     groupId={group.id}
                                     selectedId={selectedId}
                                     onDelete={onDeletePipeline}
+                                    onEdit={onEditPipeline}
+                                    onWebhook={onWebhookPipeline}
                                 />
                             ))
                         )}
@@ -247,9 +266,26 @@ export default function PipelineLayout({ children }: { children: React.ReactNode
     const [pDesc, setPDesc] = useState('')
     const [pGroupId, setPGroupId] = useState<string>('none')
     const [pStages, setPStages] = useState<StageItem[]>([...DEFAULT_PIPELINE_STAGES])
+    const [pBilateral, setPBilateral] = useState(false)
+    const [pKommoCredId, setPKommoCredId] = useState<string>('none')
+    const [pKommoPipelineId, setPKommoPipelineId] = useState<number | null>(null)
+    const [createStep, setCreateStep] = useState(1)
+    const [webhookUrl, setWebhookUrl] = useState<string | null>(null)
+    const [createdPipelineId, setCreatedPipelineId] = useState<string | null>(null)
+    const [copied, setCopied] = useState(false)
 
     const [createGroupOpen, setCreateGroupOpen] = useState(false)
     const [gName, setGName] = useState('')
+
+    // Edit pipeline
+    const [editPipeline, setEditPipeline] = useState<Pipeline | null>(null)
+    const [editName, setEditName] = useState('')
+    const [editColor, setEditColor] = useState('#6366f1')
+    const [editDesc, setEditDesc] = useState('')
+
+    // Webhook dialog
+    const [webhookPipeline, setWebhookPipeline] = useState<Pipeline | null>(null)
+    const [webhookCopied, setWebhookCopied] = useState(false)
 
     const createPipeline = useCreatePipeline()
     const deletePipeline = useDeletePipeline()
@@ -259,8 +295,37 @@ export default function PipelineLayout({ children }: { children: React.ReactNode
     const deleteGroup = useDeleteGroup()
     const reorderGroups = useReorderGroups()
     const reorderPipelines = useReorderPipelines()
+    const activateBilateral = useActivateBilateral()
+    const updatePipeline = useUpdatePipeline()
+
+    const { data: bilateralConfig, isLoading: bilateralLoading } = useGetBilateralConfig(
+        webhookPipeline?.id ?? '',
+        enterprise?.id ?? '',
+    )
+
+    const { data: allCredentials = [] } = useCredentials(enterprise?.id ?? '')
+    const kommoCredentials = allCredentials.filter(c => c.type === 'KOMMO' && c.isActive)
+
+    const { data: kommoPipelines = [], isLoading: kommoPipelinesLoading } = useKommoPipelines(
+        pBilateral && pKommoCredId !== 'none' ? pKommoCredId : null,
+        enterprise?.id ?? '',
+    )
+    const selectedKommoPipeline = kommoPipelines.find(p => p.id === pKommoPipelineId) ?? null
 
     const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
+
+    // Auto-popular stages ao selecionar pipeline Kommo
+    useEffect(() => {
+        if (selectedKommoPipeline?.statuses?.length) {
+            setPStages(selectedKommoPipeline.statuses.map((s) => ({
+                tempId: `kommo-${s.id}`,
+                name: s.name,
+                color: s.color || '#6366f1',
+                kommoStatusId: s.id,
+            })))
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pKommoPipelineId])
 
     function toggle(groupId: string) {
         setCollapsed(prev => {
@@ -302,29 +367,73 @@ export default function PipelineLayout({ children }: { children: React.ReactNode
             const userNames = new Set(validUserStages.map(s => s.name.trim().toLowerCase()))
             const autoNames = new Set(autoCreated.map(s => s.name.toLowerCase()))
 
-            // Excluir estágios auto-criados que o usuário removeu
             const toDelete = autoCreated.filter(s => !userNames.has(s.name.toLowerCase()))
-            // Criar estágios que o usuário adicionou além dos padrões
             const toCreate = validUserStages.filter(s => !autoNames.has(s.name.trim().toLowerCase()))
 
-            await Promise.allSettled([
-                ...toDelete.map(s => deleteStage.mutateAsync({ stageId: s.id, enterpriseId: enterprise.id })),
-                ...toCreate.map(s => createStage.mutateAsync({
+            // Deletar stages desnecessários em paralelo
+            await Promise.allSettled(
+                toDelete.map(s => deleteStage.mutateAsync({ stageId: s.id, enterpriseId: enterprise.id }))
+            )
+            // Criar stages SEQUENCIALMENTE para garantir a ordem correta
+            for (const s of toCreate) {
+                await createStage.mutateAsync({
                     pipelineId: p.id,
                     enterpriseId: enterprise.id,
                     name: s.name.trim(),
                     color: s.color,
-                })),
-            ])
+                    ...(s.kommoStatusId !== undefined && { kommoStatusId: s.kommoStatusId }),
+                })
+            }
 
-            setCreatePipelineOpen(false)
-            setPName(''); setPDesc(''); setPGroupId('none')
-            setPStages([...DEFAULT_PIPELINE_STAGES])
-            router.push(`/pipeline/${p.id}`)
-            toast.success('Pipeline criada!')
+            // Ativar bilateral: ir para passo 3 com URL do webhook
+            if (pBilateral && pKommoCredId && pKommoCredId !== 'none') {
+                try {
+                    const config = await activateBilateral.mutateAsync({
+                        pipelineId: p.id,
+                        enterpriseId: enterprise.id,
+                        kommoCredentialId: pKommoCredId,
+                        kommoPipelineId: pKommoPipelineId ?? undefined,
+                    })
+                    setCreatedPipelineId(p.id)
+                    setWebhookUrl(config.webhookUrl)
+                    setCreateStep(3)
+                    toast.success('Pipeline criada!')
+                } catch {
+                    toast.error('Pipeline criada, mas falha ao ativar bilateral com Kommo.')
+                    setCreatePipelineOpen(false)
+                    setPName(''); setPDesc(''); setPGroupId('none')
+                    setPStages([...DEFAULT_PIPELINE_STAGES])
+                    setPBilateral(false); setPKommoCredId('none'); setPKommoPipelineId(null); setCreateStep(1)
+                    router.push(`/pipeline/${p.id}`)
+                }
+            } else {
+                setCreatePipelineOpen(false)
+                setPName(''); setPDesc(''); setPGroupId('none')
+                setPStages([...DEFAULT_PIPELINE_STAGES])
+                setPBilateral(false); setPKommoCredId('none'); setPKommoPipelineId(null); setCreateStep(1)
+                router.push(`/pipeline/${p.id}`)
+                toast.success('Pipeline criada!')
+            }
         } catch {
             toast.error('Erro ao criar pipeline.')
         }
+    }
+
+    function handleFinishCreate() {
+        const id = createdPipelineId
+        setCreatePipelineOpen(false)
+        setPName(''); setPDesc(''); setPGroupId('none')
+        setPStages([...DEFAULT_PIPELINE_STAGES])
+        setPBilateral(false); setPKommoCredId('none'); setPKommoPipelineId(null); setCreateStep(1)
+        setWebhookUrl(null); setCreatedPipelineId(null)
+        if (id) router.push(`/pipeline/${id}`)
+    }
+
+    function copyWebhook(url: string) {
+        navigator.clipboard.writeText(url).then(() => {
+            setCopied(true)
+            setTimeout(() => setCopied(false), 2000)
+        })
     }
 
     function handleCreateGroup() {
@@ -336,6 +445,27 @@ export default function PipelineLayout({ children }: { children: React.ReactNode
                     setCreateGroupOpen(false)
                     setGName('')
                     toast.success('Grupo criado!')
+                },
+                onError: (e) => toast.error(e.message),
+            },
+        )
+    }
+
+    function handleOpenEdit(p: Pipeline) {
+        setEditPipeline(p)
+        setEditName(p.name)
+        setEditColor(p.color)
+        setEditDesc(p.description ?? '')
+    }
+
+    function handleSaveEdit() {
+        if (!enterprise?.id || !editPipeline || !editName.trim()) return
+        updatePipeline.mutate(
+            { id: editPipeline.id, enterpriseId: enterprise.id, name: editName.trim(), color: editColor, description: editDesc.trim() || undefined },
+            {
+                onSuccess: () => {
+                    setEditPipeline(null)
+                    toast.success('Pipeline atualizada.')
                 },
                 onError: (e) => toast.error(e.message),
             },
@@ -448,6 +578,8 @@ export default function PipelineLayout({ children }: { children: React.ReactNode
                                         selectedId={selectedId}
                                         onDeletePipeline={handleDeletePipeline}
                                         onDeleteGroup={handleDeleteGroup}
+                                        onEditPipeline={handleOpenEdit}
+                                        onWebhookPipeline={setWebhookPipeline}
                                     />
                                 ))}
                             </SortableContext>
@@ -471,6 +603,8 @@ export default function PipelineLayout({ children }: { children: React.ReactNode
                                                 groupId={null}
                                                 selectedId={selectedId}
                                                 onDelete={handleDeletePipeline}
+                                                onEdit={handleOpenEdit}
+                                                onWebhook={setWebhookPipeline}
                                             />
                                         ))}
                                     </SortableContext>
@@ -492,118 +626,385 @@ export default function PipelineLayout({ children }: { children: React.ReactNode
             <div className="flex-1 min-w-0 flex flex-col">{children}</div>
 
             {/* ── Dialog: criar pipeline ───────────────────────────────────────── */}
-            <Dialog open={createPipelineOpen} onOpenChange={(v) => { setCreatePipelineOpen(v); if (!v) { setPName(''); setPDesc(''); setPGroupId('none'); setPStages([...DEFAULT_PIPELINE_STAGES]) } }}>
+            <Dialog open={createPipelineOpen} onOpenChange={(v) => { if (!v) { const id = createdPipelineId; setCreatePipelineOpen(false); setPName(''); setPDesc(''); setPGroupId('none'); setPStages([...DEFAULT_PIPELINE_STAGES]); setPBilateral(false); setPKommoCredId('none'); setPKommoPipelineId(null); setCreateStep(1); setWebhookUrl(null); setCreatedPipelineId(null); if (id) router.push(`/pipeline/${id}`) } else { setCreatePipelineOpen(true) } }}>
                 <DialogContent className="max-w-md">
                     <DialogHeader>
-                        <DialogTitle>Nova pipeline</DialogTitle>
+                        <DialogTitle className="flex items-center justify-between">
+                            Nova pipeline
+                            <span className="text-xs font-normal text-muted-foreground">
+                                Passo {createStep} de {pBilateral || createStep === 3 ? 3 : 2}
+                            </span>
+                        </DialogTitle>
+                    </DialogHeader>
+
+                    {/* ── Passo 1: Informações básicas ── */}
+                    {createStep === 1 && (
+                        <div className="flex flex-col gap-3 py-2">
+                            <div className="flex flex-col gap-1.5">
+                                <Label>Nome</Label>
+                                <Input
+                                    value={pName}
+                                    onChange={(e) => setPName(e.target.value)}
+                                    placeholder="Ex: Vendas B2B"
+                                    autoFocus
+                                />
+                            </div>
+                            <div className="flex flex-col gap-1.5">
+                                <Label>
+                                    Descrição{' '}
+                                    <span className="text-muted-foreground font-normal">(opcional)</span>
+                                </Label>
+                                <Input
+                                    value={pDesc}
+                                    onChange={(e) => setPDesc(e.target.value)}
+                                    placeholder="Breve descrição..."
+                                />
+                            </div>
+                            {groups.length > 0 && (
+                                <div className="flex flex-col gap-1.5">
+                                    <Label>Grupo</Label>
+                                    <Select value={pGroupId} onValueChange={setPGroupId}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Sem grupo" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="none">Sem grupo</SelectItem>
+                                            {groups.map(g => (
+                                                <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
+                            <div className="flex flex-col gap-1.5">
+                                <Label>Cor</Label>
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="color"
+                                        value={pColor}
+                                        onChange={(e) => setPColor(e.target.value)}
+                                        className="size-8 rounded cursor-pointer border"
+                                    />
+                                    <span className="text-sm text-muted-foreground">{pColor}</span>
+                                </div>
+                            </div>
+
+                            {/* Sincronização bilateral com Kommo */}
+                            {kommoCredentials.length > 0 && (
+                                <div className="flex flex-col gap-2 rounded-lg border p-3">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <ArrowLeftRight className="size-4 text-muted-foreground" />
+                                            <div>
+                                                <p className="text-sm font-medium">Sincronizar com Kommo</p>
+                                                <p className="text-xs text-muted-foreground">Deals espelhados bidirecionalmente</p>
+                                            </div>
+                                        </div>
+                                        <Switch checked={pBilateral} onCheckedChange={(v) => { setPBilateral(v); if (!v) { setPKommoCredId('none'); setPKommoPipelineId(null) } }} />
+                                    </div>
+                                    {pBilateral && (
+                                        <Select value={pKommoCredId} onValueChange={(v) => { setPKommoCredId(v); setPKommoPipelineId(null) }}>
+                                            <SelectTrigger className="h-8 text-xs">
+                                                <SelectValue placeholder="Selecione a conta Kommo" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="none">Selecione uma conta</SelectItem>
+                                                {kommoCredentials.map(c => (
+                                                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* ── Passo 2: Estágios ── */}
+                    {createStep === 2 && (
+                        <div className="flex flex-col gap-3 py-2">
+                            {pBilateral ? (
+                                <>
+                                    {/* Seletor de pipeline Kommo */}
+                                    <div className="flex flex-col gap-1.5">
+                                        <Label>Pipeline do Kommo</Label>
+                                        <p className="text-xs text-muted-foreground -mt-1">
+                                            Selecione o pipeline do Kommo para sincronizar. Os estágios serão importados automaticamente.
+                                        </p>
+                                        {kommoPipelinesLoading ? (
+                                            <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
+                                                <Loader2 className="size-3.5 animate-spin" />
+                                                Carregando pipelines do Kommo...
+                                            </div>
+                                        ) : kommoPipelines.length === 0 ? (
+                                            <p className="text-xs text-muted-foreground py-2">Nenhum pipeline encontrado na conta Kommo.</p>
+                                        ) : (
+                                            <Select
+                                                value={pKommoPipelineId?.toString() ?? 'none'}
+                                                onValueChange={(v) => setPKommoPipelineId(v === 'none' ? null : Number(v))}
+                                            >
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Selecione um pipeline" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="none">Selecione um pipeline</SelectItem>
+                                                    {kommoPipelines.map(p => (
+                                                        <SelectItem key={p.id} value={p.id.toString()}>{p.name}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        )}
+                                    </div>
+
+                                    {/* Preview dos estágios importados */}
+                                    {selectedKommoPipeline && (
+                                        <div className="flex flex-col gap-1.5">
+                                            <Label className="text-xs text-muted-foreground">
+                                                Estágios importados ({pStages.length})
+                                            </Label>
+                                            <div className="flex flex-col gap-1 max-h-44 overflow-y-auto pr-1 rounded-md border p-2">
+                                                {pStages.map((s) => (
+                                                    <div key={s.tempId} className="flex items-center gap-2 py-0.5">
+                                                        <span
+                                                            className="size-2.5 rounded-full shrink-0"
+                                                            style={{ backgroundColor: s.color }}
+                                                        />
+                                                        <span className="text-xs">{s.name}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
+                            ) : (
+                                /* Editor manual de estágios (sem bilateral) */
+                                <div className="flex flex-col gap-1.5">
+                                    <div className="flex items-center justify-between">
+                                        <Label>Estágios</Label>
+                                        <button
+                                            type="button"
+                                            onClick={addPStage}
+                                            className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 transition-colors"
+                                        >
+                                            <Plus className="size-3" />
+                                            Adicionar
+                                        </button>
+                                    </div>
+                                    <div className="flex flex-col gap-1 max-h-52 overflow-y-auto pr-1">
+                                        {pStages.map((s, i) => (
+                                            <div key={s.tempId} className="flex items-center gap-2">
+                                                <input
+                                                    type="color"
+                                                    value={s.color}
+                                                    onChange={(e) => updatePStage(i, 'color', e.target.value)}
+                                                    className="size-6 rounded cursor-pointer border flex-shrink-0"
+                                                    title="Cor do estágio"
+                                                />
+                                                <Input
+                                                    value={s.name}
+                                                    onChange={(e) => updatePStage(i, 'name', e.target.value)}
+                                                    className="h-7 text-xs flex-1"
+                                                    placeholder="Nome do estágio"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removePStage(i)}
+                                                    className="p-0.5 text-muted-foreground hover:text-destructive transition-colors flex-shrink-0"
+                                                >
+                                                    <X className="size-3.5" />
+                                                </button>
+                                            </div>
+                                        ))}
+                                        {pStages.length === 0 && (
+                                            <p className="text-xs text-muted-foreground text-center py-2">
+                                                Nenhum estágio. Adicione pelo menos um.
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* ── Passo 3: URL do webhook (bilateral) ── */}
+                    {createStep === 3 && (
+                        <div className="flex flex-col gap-3 py-2">
+                            <div className="flex items-center gap-2 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900 p-3">
+                                <ArrowLeftRight className="size-4 text-green-600 dark:text-green-400 shrink-0" />
+                                <div>
+                                    <p className="text-sm font-medium text-green-800 dark:text-green-300">Sincronização bilateral ativada!</p>
+                                    <p className="text-xs text-green-700 dark:text-green-400">Configure o webhook no Kommo para receber eventos.</p>
+                                </div>
+                            </div>
+                            <div className="flex flex-col gap-1.5">
+                                <Label className="text-xs">URL do Webhook</Label>
+                                <p className="text-xs text-muted-foreground -mt-0.5">
+                                    Acesse o Kommo em{' '}
+                                    <strong>Configurações → Webhooks → Adicionar URL</strong>{' '}
+                                    e cole esta URL:
+                                </p>
+                                <div className="flex items-center gap-2 mt-1">
+                                    <code className="flex-1 rounded-md bg-muted px-3 py-2 text-xs font-mono break-all">
+                                        {webhookUrl}
+                                    </code>
+                                    <Button
+                                        size="icon"
+                                        variant="outline"
+                                        className="shrink-0"
+                                        onClick={() => webhookUrl && copyWebhook(webhookUrl)}
+                                    >
+                                        {copied ? <Check className="size-4 text-green-500" /> : <Copy className="size-4" />}
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <DialogFooter>
+                        {createStep === 1 && (
+                            <>
+                                <Button variant="outline" onClick={() => setCreatePipelineOpen(false)}>
+                                    Cancelar
+                                </Button>
+                                <Button
+                                    onClick={() => setCreateStep(2)}
+                                    disabled={
+                                        !pName.trim() ||
+                                        (pBilateral && (pKommoCredId === 'none' || !pKommoCredId))
+                                    }
+                                >
+                                    Próximo
+                                </Button>
+                            </>
+                        )}
+                        {createStep === 2 && (
+                            <>
+                                <Button variant="outline" onClick={() => setCreateStep(1)}>
+                                    Voltar
+                                </Button>
+                                <Button
+                                    onClick={handleCreatePipeline}
+                                    disabled={
+                                        createPipeline.isPending || createStage.isPending || deleteStage.isPending || activateBilateral.isPending ||
+                                        (pBilateral && !pKommoPipelineId)
+                                    }
+                                >
+                                    {(createPipeline.isPending || createStage.isPending || deleteStage.isPending || activateBilateral.isPending) && <Loader2 className="size-3.5 animate-spin mr-1.5" />}
+                                    Criar pipeline
+                                </Button>
+                            </>
+                        )}
+                        {createStep === 3 && (
+                            <Button onClick={handleFinishCreate}>
+                                Concluir e abrir pipeline
+                            </Button>
+                        )}
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* ── Dialog: editar pipeline ──────────────────────────────────────── */}
+            <Dialog open={!!editPipeline} onOpenChange={(v) => { if (!v) setEditPipeline(null) }}>
+                <DialogContent className="max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle>Editar pipeline</DialogTitle>
                     </DialogHeader>
                     <div className="flex flex-col gap-3 py-2">
                         <div className="flex flex-col gap-1.5">
                             <Label>Nome</Label>
                             <Input
-                                value={pName}
-                                onChange={(e) => setPName(e.target.value)}
-                                placeholder="Ex: Vendas B2B"
-                                onKeyDown={(e) => e.key === 'Enter' && handleCreatePipeline()}
+                                value={editName}
+                                onChange={(e) => setEditName(e.target.value)}
+                                placeholder="Nome da pipeline"
                                 autoFocus
                             />
                         </div>
                         <div className="flex flex-col gap-1.5">
-                            <Label>
-                                Descrição{' '}
-                                <span className="text-muted-foreground font-normal">(opcional)</span>
-                            </Label>
+                            <Label>Descrição <span className="text-muted-foreground font-normal">(opcional)</span></Label>
                             <Input
-                                value={pDesc}
-                                onChange={(e) => setPDesc(e.target.value)}
+                                value={editDesc}
+                                onChange={(e) => setEditDesc(e.target.value)}
                                 placeholder="Breve descrição..."
                             />
                         </div>
-                        {groups.length > 0 && (
-                            <div className="flex flex-col gap-1.5">
-                                <Label>Grupo</Label>
-                                <Select value={pGroupId} onValueChange={setPGroupId}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Sem grupo" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="none">Sem grupo</SelectItem>
-                                        {groups.map(g => (
-                                            <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        )}
                         <div className="flex flex-col gap-1.5">
                             <Label>Cor</Label>
                             <div className="flex items-center gap-2">
                                 <input
                                     type="color"
-                                    value={pColor}
-                                    onChange={(e) => setPColor(e.target.value)}
+                                    value={editColor}
+                                    onChange={(e) => setEditColor(e.target.value)}
                                     className="size-8 rounded cursor-pointer border"
                                 />
-                                <span className="text-sm text-muted-foreground">{pColor}</span>
-                            </div>
-                        </div>
-
-                        {/* Estágios */}
-                        <div className="flex flex-col gap-1.5">
-                            <div className="flex items-center justify-between">
-                                <Label>Estágios</Label>
-                                <button
-                                    type="button"
-                                    onClick={addPStage}
-                                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 transition-colors"
-                                >
-                                    <Plus className="size-3" />
-                                    Adicionar
-                                </button>
-                            </div>
-                            <div className="flex flex-col gap-1 max-h-44 overflow-y-auto pr-1">
-                                {pStages.map((s, i) => (
-                                    <div key={s.tempId} className="flex items-center gap-2">
-                                        <input
-                                            type="color"
-                                            value={s.color}
-                                            onChange={(e) => updatePStage(i, 'color', e.target.value)}
-                                            className="size-6 rounded cursor-pointer border flex-shrink-0"
-                                            title="Cor do estágio"
-                                        />
-                                        <Input
-                                            value={s.name}
-                                            onChange={(e) => updatePStage(i, 'name', e.target.value)}
-                                            className="h-7 text-xs flex-1"
-                                            placeholder="Nome do estágio"
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => removePStage(i)}
-                                            className="p-0.5 text-muted-foreground hover:text-destructive transition-colors flex-shrink-0"
-                                        >
-                                            <X className="size-3.5" />
-                                        </button>
-                                    </div>
-                                ))}
-                                {pStages.length === 0 && (
-                                    <p className="text-xs text-muted-foreground text-center py-2">
-                                        Nenhum estágio. Adicione pelo menos um.
-                                    </p>
-                                )}
+                                <span className="text-sm text-muted-foreground">{editColor}</span>
                             </div>
                         </div>
                     </div>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setCreatePipelineOpen(false)}>
-                            Cancelar
+                        <Button variant="outline" onClick={() => setEditPipeline(null)}>Cancelar</Button>
+                        <Button onClick={handleSaveEdit} disabled={!editName.trim() || updatePipeline.isPending}>
+                            {updatePipeline.isPending && <Loader2 className="size-3.5 animate-spin mr-1.5" />}
+                            Salvar
                         </Button>
-                        <Button
-                            onClick={handleCreatePipeline}
-                            disabled={!pName.trim() || createPipeline.isPending || createStage.isPending || deleteStage.isPending}
-                        >
-                            {(createPipeline.isPending || createStage.isPending || deleteStage.isPending) && <Loader2 className="size-3.5 animate-spin mr-1.5" />}
-                            Criar
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* ── Dialog: webhook URL ───────────────────────────────────────────── */}
+            <Dialog open={!!webhookPipeline} onOpenChange={(v) => { if (!v) { setWebhookPipeline(null); setWebhookCopied(false) } }}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Link2 className="size-4" />
+                            Webhook Kommo — {webhookPipeline?.name}
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="flex flex-col gap-3 py-2">
+                        {bilateralLoading ? (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground py-4 justify-center">
+                                <Loader2 className="size-4 animate-spin" />
+                                Carregando...
+                            </div>
+                        ) : bilateralConfig?.webhookUrl ? (
+                            <>
+                                <div className="flex items-center gap-2 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900 p-3">
+                                    <ArrowLeftRight className="size-4 text-green-600 dark:text-green-400 shrink-0" />
+                                    <p className="text-sm text-green-800 dark:text-green-300">Sincronização bilateral ativa</p>
+                                </div>
+                                <div className="flex flex-col gap-1.5">
+                                    <Label className="text-xs">URL do Webhook</Label>
+                                    <p className="text-xs text-muted-foreground">
+                                        Configure no Kommo em{' '}
+                                        <strong>Configurações → Webhooks → Adicionar URL</strong>:
+                                    </p>
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <code className="flex-1 rounded-md bg-muted px-3 py-2 text-xs font-mono break-all">
+                                            {bilateralConfig.webhookUrl}
+                                        </code>
+                                        <Button
+                                            size="icon"
+                                            variant="outline"
+                                            className="shrink-0"
+                                            onClick={() => {
+                                                navigator.clipboard.writeText(bilateralConfig.webhookUrl!)
+                                                setWebhookCopied(true)
+                                                setTimeout(() => setWebhookCopied(false), 2000)
+                                            }}
+                                        >
+                                            {webhookCopied ? <Check className="size-4 text-green-500" /> : <Copy className="size-4" />}
+                                        </Button>
+                                    </div>
+                                </div>
+                            </>
+                        ) : (
+                            <p className="text-sm text-muted-foreground text-center py-4">
+                                Nenhum webhook configurado para esta pipeline.
+                            </p>
+                        )}
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => { setWebhookPipeline(null); setWebhookCopied(false) }}>
+                            Fechar
                         </Button>
                     </DialogFooter>
                 </DialogContent>

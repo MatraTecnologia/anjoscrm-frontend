@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import {
     Plus, Loader2, Trash2, MoreHorizontal, ChevronDown, ChevronRight,
-    GripVertical, FolderPlus,
+    GripVertical, FolderPlus, X,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -36,8 +36,23 @@ import {
     useListGroups, useListPipelines,
     useCreateGroup, useDeleteGroup, useReorderGroups,
     useCreatePipeline, useDeletePipeline, useReorderPipelines,
-    type PipelineGroup, type Pipeline,
+    useCreateStage, useDeleteStage,
+    type PipelineGroup, type Pipeline, type PipelineStage,
 } from '@/services/pipelines'
+import { api } from '@/lib/api'
+
+// ─── Stage helpers ────────────────────────────────────────────────────────────
+
+type StageItem = { tempId: string; name: string; color: string }
+
+const DEFAULT_PIPELINE_STAGES: StageItem[] = [
+    { tempId: 'def-0', name: 'Prospecção', color: '#6b7280' },
+    { tempId: 'def-1', name: 'Qualificação', color: '#3b82f6' },
+    { tempId: 'def-2', name: 'Proposta', color: '#8b5cf6' },
+    { tempId: 'def-3', name: 'Negociação', color: '#f59e0b' },
+    { tempId: 'def-4', name: 'Ganho', color: '#10b981' },
+    { tempId: 'def-5', name: 'Perdido', color: '#ef4444' },
+]
 
 // ─── Ícone funil ──────────────────────────────────────────────────────────────
 
@@ -231,12 +246,15 @@ export default function PipelineLayout({ children }: { children: React.ReactNode
     const [pColor, setPColor] = useState('#6366f1')
     const [pDesc, setPDesc] = useState('')
     const [pGroupId, setPGroupId] = useState<string>('none')
+    const [pStages, setPStages] = useState<StageItem[]>([...DEFAULT_PIPELINE_STAGES])
 
     const [createGroupOpen, setCreateGroupOpen] = useState(false)
     const [gName, setGName] = useState('')
 
     const createPipeline = useCreatePipeline()
     const deletePipeline = useDeletePipeline()
+    const createStage = useCreateStage()
+    const deleteStage = useDeleteStage()
     const createGroup = useCreateGroup()
     const deleteGroup = useDeleteGroup()
     const reorderGroups = useReorderGroups()
@@ -253,26 +271,60 @@ export default function PipelineLayout({ children }: { children: React.ReactNode
         })
     }
 
-    function handleCreatePipeline() {
+    function addPStage() {
+        setPStages(prev => [...prev, { tempId: `new-${Date.now()}`, name: '', color: '#6366f1' }])
+    }
+    function removePStage(i: number) {
+        setPStages(prev => prev.filter((_, idx) => idx !== i))
+    }
+    function updatePStage(i: number, field: 'name' | 'color', value: string) {
+        setPStages(prev => prev.map((s, idx) => idx === i ? { ...s, [field]: value } : s))
+    }
+
+    async function handleCreatePipeline() {
         if (!enterprise?.id || !pName.trim()) return
-        createPipeline.mutate(
-            {
+        try {
+            const p = await createPipeline.mutateAsync({
                 enterpriseId: enterprise.id,
                 name: pName.trim(),
                 color: pColor,
                 description: pDesc.trim() || undefined,
                 groupId: pGroupId === 'none' ? null : pGroupId,
-            },
-            {
-                onSuccess: (p) => {
-                    setCreatePipelineOpen(false)
-                    setPName(''); setPDesc(''); setPGroupId('none')
-                    router.push(`/pipeline/${p.id}`)
-                    toast.success('Pipeline criada!')
-                },
-                onError: (e) => toast.error(e.message),
-            },
-        )
+            })
+
+            // Busca pipeline completo para ter os estágios criados automaticamente
+            const { data: fresh } = await api.get<Pipeline>(
+                `/pipelines/detail/${p.id}`,
+                { headers: { 'X-Enterprise-Id': enterprise.id } },
+            )
+            const autoCreated: PipelineStage[] = fresh.stages ?? []
+            const validUserStages = pStages.filter(s => s.name.trim())
+            const userNames = new Set(validUserStages.map(s => s.name.trim().toLowerCase()))
+            const autoNames = new Set(autoCreated.map(s => s.name.toLowerCase()))
+
+            // Excluir estágios auto-criados que o usuário removeu
+            const toDelete = autoCreated.filter(s => !userNames.has(s.name.toLowerCase()))
+            // Criar estágios que o usuário adicionou além dos padrões
+            const toCreate = validUserStages.filter(s => !autoNames.has(s.name.trim().toLowerCase()))
+
+            await Promise.allSettled([
+                ...toDelete.map(s => deleteStage.mutateAsync({ stageId: s.id, enterpriseId: enterprise.id })),
+                ...toCreate.map(s => createStage.mutateAsync({
+                    pipelineId: p.id,
+                    enterpriseId: enterprise.id,
+                    name: s.name.trim(),
+                    color: s.color,
+                })),
+            ])
+
+            setCreatePipelineOpen(false)
+            setPName(''); setPDesc(''); setPGroupId('none')
+            setPStages([...DEFAULT_PIPELINE_STAGES])
+            router.push(`/pipeline/${p.id}`)
+            toast.success('Pipeline criada!')
+        } catch {
+            toast.error('Erro ao criar pipeline.')
+        }
     }
 
     function handleCreateGroup() {
@@ -440,8 +492,8 @@ export default function PipelineLayout({ children }: { children: React.ReactNode
             <div className="flex-1 min-w-0 flex flex-col">{children}</div>
 
             {/* ── Dialog: criar pipeline ───────────────────────────────────────── */}
-            <Dialog open={createPipelineOpen} onOpenChange={setCreatePipelineOpen}>
-                <DialogContent className="max-w-sm">
+            <Dialog open={createPipelineOpen} onOpenChange={(v) => { setCreatePipelineOpen(v); if (!v) { setPName(''); setPDesc(''); setPGroupId('none'); setPStages([...DEFAULT_PIPELINE_STAGES]) } }}>
+                <DialogContent className="max-w-md">
                     <DialogHeader>
                         <DialogTitle>Nova pipeline</DialogTitle>
                     </DialogHeader>
@@ -495,6 +547,52 @@ export default function PipelineLayout({ children }: { children: React.ReactNode
                                 <span className="text-sm text-muted-foreground">{pColor}</span>
                             </div>
                         </div>
+
+                        {/* Estágios */}
+                        <div className="flex flex-col gap-1.5">
+                            <div className="flex items-center justify-between">
+                                <Label>Estágios</Label>
+                                <button
+                                    type="button"
+                                    onClick={addPStage}
+                                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 transition-colors"
+                                >
+                                    <Plus className="size-3" />
+                                    Adicionar
+                                </button>
+                            </div>
+                            <div className="flex flex-col gap-1 max-h-44 overflow-y-auto pr-1">
+                                {pStages.map((s, i) => (
+                                    <div key={s.tempId} className="flex items-center gap-2">
+                                        <input
+                                            type="color"
+                                            value={s.color}
+                                            onChange={(e) => updatePStage(i, 'color', e.target.value)}
+                                            className="size-6 rounded cursor-pointer border flex-shrink-0"
+                                            title="Cor do estágio"
+                                        />
+                                        <Input
+                                            value={s.name}
+                                            onChange={(e) => updatePStage(i, 'name', e.target.value)}
+                                            className="h-7 text-xs flex-1"
+                                            placeholder="Nome do estágio"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => removePStage(i)}
+                                            className="p-0.5 text-muted-foreground hover:text-destructive transition-colors flex-shrink-0"
+                                        >
+                                            <X className="size-3.5" />
+                                        </button>
+                                    </div>
+                                ))}
+                                {pStages.length === 0 && (
+                                    <p className="text-xs text-muted-foreground text-center py-2">
+                                        Nenhum estágio. Adicione pelo menos um.
+                                    </p>
+                                )}
+                            </div>
+                        </div>
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setCreatePipelineOpen(false)}>
@@ -502,9 +600,9 @@ export default function PipelineLayout({ children }: { children: React.ReactNode
                         </Button>
                         <Button
                             onClick={handleCreatePipeline}
-                            disabled={!pName.trim() || createPipeline.isPending}
+                            disabled={!pName.trim() || createPipeline.isPending || createStage.isPending || deleteStage.isPending}
                         >
-                            {createPipeline.isPending && <Loader2 className="size-3.5 animate-spin mr-1.5" />}
+                            {(createPipeline.isPending || createStage.isPending || deleteStage.isPending) && <Loader2 className="size-3.5 animate-spin mr-1.5" />}
                             Criar
                         </Button>
                     </DialogFooter>

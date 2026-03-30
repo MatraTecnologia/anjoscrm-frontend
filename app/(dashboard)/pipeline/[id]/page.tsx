@@ -37,6 +37,10 @@ import {
     DropdownMenu, DropdownMenuContent, DropdownMenuItem,
     DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import {
+    AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+    AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -45,6 +49,7 @@ import { useEnterprise } from '@/hooks/use-enterprise'
 import { usePipelineSocket } from '@/hooks/use-pipeline-socket'
 import {
     useGetPipeline, useGetStageFollowUpConfig, useUpsertStageFollowUpConfig, useGetPipelineFollowUpBoard,
+    useCreateStage, useDeleteStage,
     type PipelineStage, type StageFollowUpConfig, type FollowUpAction, type FollowUpActionType, type FollowUpStep, type FollowUpBoardDeal,
 } from '@/services/pipelines'
 import {
@@ -1308,6 +1313,8 @@ function KanbanColumn({
 }) {
     const scrollRef = useRef<HTMLDivElement>(null)
     const { setNodeRef: setDropRef, isOver } = useDroppable({ id: stage.id })
+    const deleteStage = useDeleteStage()
+    const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
 
     const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
         useStageDeals(stage.id, enterpriseId, sort)
@@ -1367,11 +1374,29 @@ function KanbanColumn({
         }
     }, [virtualizer.getVirtualItems(), hasNextPage, isFetchingNextPage, filteredDeals.length, fetchNextPage])
 
+    function handleDeleteStage() {
+        if (total > 0) {
+            toast.error(`Este estágio tem ${total} negócio(s). Mova-os antes de excluir.`)
+            return
+        }
+        setConfirmDeleteOpen(true)
+    }
+
+    function confirmDelete() {
+        deleteStage.mutate(
+            { stageId: stage.id, enterpriseId },
+            {
+                onSuccess: () => toast.success('Estágio excluído.'),
+                onError: (e) => toast.error(e.message),
+            },
+        )
+    }
+
     return (
         <div className="w-72 flex-shrink-0 flex flex-col rounded-xl bg-muted/40 border border-border/60">
             {/* Header */}
             <div className="px-3 pt-3 pb-2">
-                <div className="flex items-center gap-1.5">
+                <div className="group flex items-center gap-1.5">
                     <span className="size-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: stage.color }} />
                     <span className="text-sm font-semibold truncate">{stage.name}</span>
                     <span className="ml-auto text-xs text-muted-foreground font-mono">
@@ -1380,11 +1405,48 @@ function KanbanColumn({
                             : total
                         }
                     </span>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <button className="p-0.5 rounded hover:bg-muted transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0">
+                                <MoreHorizontal className="size-3.5 text-muted-foreground" />
+                            </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-44">
+                            <DropdownMenuItem
+                                className="text-destructive focus:text-destructive text-xs"
+                                onClick={handleDeleteStage}
+                            >
+                                <Trash className="size-3.5 mr-2" />
+                                Excluir estágio
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </div>
                 <div className="text-xs font-medium text-blue-600 mt-0.5 pl-4">
                     {formatBRL(totalValue)}
                 </div>
             </div>
+
+            <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Excluir estágio</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Tem certeza que deseja excluir o estágio &ldquo;{stage.name}&rdquo;?
+                            Esta ação não pode ser desfeita.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={confirmDelete}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                            Excluir
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
 
             {/* Drop zone */}
             <div
@@ -2115,6 +2177,7 @@ export default function PipelinePage() {
     const { data: pipeline, isLoading } = useGetPipeline(id, enterpriseId)
     const updateDeal = useUpdateDeal()
     const deleteDeal = useDeleteDeal()
+    const createStage = useCreateStage()
     const { data: allTagsPage = [] } = useListTags(enterpriseId)
     const { data: allMembers = [] } = useMembers(enterpriseId)
 
@@ -2128,6 +2191,9 @@ export default function PipelinePage() {
     const [search, setSearch] = useState('')
     const [filterOpen, setFilterOpen] = useState(false)
     const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS)
+    const [addStageActive, setAddStageActive] = useState(false)
+    const [addStageName, setAddStageName] = useState('')
+    const [addStageColor, setAddStageColor] = useState('#6366f1')
 
     const activeFilterCount =
         (filters.tagIds.length > 0 ? 1 : 0) +
@@ -2137,6 +2203,22 @@ export default function PipelinePage() {
 
     function handleWhatsappClick(lead: DealLead) {
         setChatLead(prev => prev?.id === lead.id ? null : lead)
+    }
+
+    function handleCreateStage() {
+        if (!addStageName.trim() || !enterpriseId || !pipeline) return
+        createStage.mutate(
+            { pipelineId: pipeline.id, enterpriseId, name: addStageName.trim(), color: addStageColor },
+            {
+                onSuccess: () => {
+                    setAddStageActive(false)
+                    setAddStageName('')
+                    setAddStageColor('#6366f1')
+                    toast.success('Estágio criado!')
+                },
+                onError: (e) => toast.error(e.message),
+            },
+        )
     }
 
     const sensors = useSensors(
@@ -2395,6 +2477,62 @@ export default function PipelinePage() {
                                 onWhatsappClick={handleWhatsappClick}
                             />
                         ))}
+
+                        {/* Nova coluna inline */}
+                        {addStageActive ? (
+                            <div className="w-72 flex-shrink-0 flex flex-col gap-2 rounded-xl bg-muted/40 border border-border border-dashed p-3">
+                                <Input
+                                    autoFocus
+                                    value={addStageName}
+                                    onChange={e => setAddStageName(e.target.value)}
+                                    placeholder="Nome do estágio..."
+                                    className="h-8 text-sm"
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter') handleCreateStage()
+                                        if (e.key === 'Escape') { setAddStageActive(false); setAddStageName('') }
+                                    }}
+                                />
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="color"
+                                        value={addStageColor}
+                                        onChange={e => setAddStageColor(e.target.value)}
+                                        className="size-7 rounded cursor-pointer border flex-shrink-0"
+                                        title="Cor do estágio"
+                                    />
+                                    <span className="text-xs text-muted-foreground">Cor do estágio</span>
+                                </div>
+                                <div className="flex gap-1.5">
+                                    <Button
+                                        size="sm"
+                                        className="flex-1 h-7 text-xs"
+                                        onClick={handleCreateStage}
+                                        disabled={!addStageName.trim() || createStage.isPending}
+                                    >
+                                        {createStage.isPending
+                                            ? <Loader2 className="size-3 animate-spin" />
+                                            : 'Adicionar'
+                                        }
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-7 text-xs"
+                                        onClick={() => { setAddStageActive(false); setAddStageName('') }}
+                                    >
+                                        Cancelar
+                                    </Button>
+                                </div>
+                            </div>
+                        ) : (
+                            <button
+                                onClick={() => setAddStageActive(true)}
+                                className="w-64 flex-shrink-0 flex items-center justify-center gap-2 rounded-xl border border-dashed border-border/60 hover:border-border hover:bg-muted/30 text-muted-foreground hover:text-foreground text-sm transition-all py-4 px-3"
+                            >
+                                <Plus className="size-4" />
+                                Novo estágio
+                            </button>
+                        )}
                     </div>
                 </div>
 

@@ -1302,6 +1302,7 @@ function KanbanColumn({
     sort,
     search,
     filters,
+    isBilateral,
     onWhatsappClick,
 }: {
     stage: PipelineStage
@@ -1311,6 +1312,7 @@ function KanbanColumn({
     sort: Sort
     search?: string
     filters?: Filters
+    isBilateral?: boolean
     onWhatsappClick?: (lead: DealLead) => void
 }) {
     const scrollRef = useRef<HTMLDivElement>(null)
@@ -1508,14 +1510,16 @@ function KanbanColumn({
                 </div>
             </div>
 
-            {/* Footer */}
-            <div className="px-2 py-2 border-t border-border/60">
-                <NewDealPopover
-                    stageId={stage.id}
-                    pipelineId={pipelineId}
-                    enterpriseId={enterpriseId}
-                />
-            </div>
+            {/* Footer — oculto em pipelines bilaterais */}
+            {!isBilateral && (
+                <div className="px-2 py-2 border-t border-border/60">
+                    <NewDealPopover
+                        stageId={stage.id}
+                        pipelineId={pipelineId}
+                        enterpriseId={enterpriseId}
+                    />
+                </div>
+            )}
         </div>
     )
 }
@@ -2548,12 +2552,13 @@ export default function PipelinePage() {
                                 sort={sort}
                                 search={search}
                                 filters={filters}
+                                isBilateral={pipeline.isBilateral}
                                 onWhatsappClick={handleWhatsappClick}
                             />
                         ))}
 
-                        {/* Nova coluna inline */}
-                        {addStageActive ? (
+                        {/* Nova coluna inline — oculto em pipelines bilaterais */}
+                        {!pipeline.isBilateral && addStageActive ? (
                             <div className="w-72 flex-shrink-0 flex flex-col gap-2 rounded-xl bg-muted/40 border border-border border-dashed p-3">
                                 <Input
                                     autoFocus
@@ -2598,7 +2603,7 @@ export default function PipelinePage() {
                                     </Button>
                                 </div>
                             </div>
-                        ) : (
+                        ) : !pipeline.isBilateral ? (
                             <button
                                 onClick={() => setAddStageActive(true)}
                                 className="w-64 flex-shrink-0 flex items-center justify-center gap-2 rounded-xl border border-dashed border-border/60 hover:border-border hover:bg-muted/30 text-muted-foreground hover:text-foreground text-sm transition-all py-4 px-3"
@@ -2606,7 +2611,7 @@ export default function PipelinePage() {
                                 <Plus className="size-4" />
                                 Novo estágio
                             </button>
-                        )}
+                        ) : null}
                     </div>
                 </div>
 

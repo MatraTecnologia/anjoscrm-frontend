@@ -25,6 +25,8 @@ import { useSession } from '@/services/auth'
 import { useEnterprise } from '@/hooks/use-enterprise'
 import { EnterpriseSwitcher } from '@/components/enterprise-switcher'
 import { cn } from '@/lib/utils'
+import { VoipStoreProvider, useVoipStore } from '@/stores/voip-store'
+import { VoipCallPanel } from '@/components/voip-call-panel'
 
 const navItems = [
     { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -42,7 +44,20 @@ const bottomItems = [
     { href: '/settings', icon: Settings, label: 'Configurações' },
 ]
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+function GlobalVoipPanel() {
+    const { activeCall, endCall } = useVoipStore()
+    if (!activeCall) return null
+    return (
+        <VoipCallPanel
+            phone={activeCall.phone}
+            leadName={activeCall.leadName}
+            enterpriseId={activeCall.enterpriseId}
+            onClose={endCall}
+        />
+    )
+}
+
+function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
     const pathname = usePathname()
     const router = useRouter()
     const { data: session, isLoading: sessionLoading } = useSession()

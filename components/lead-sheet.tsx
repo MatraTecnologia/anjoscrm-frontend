@@ -36,7 +36,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 
 import { useRouter } from 'next/navigation'
-import { VoipCallPanel } from '@/components/voip-call-panel'
+import { useVoipStore } from '@/stores/voip-store'
 import type { Lead } from '@/services/leads'
 import { useUpdateLead } from '@/services/leads'
 import { useMembers } from '@/services/enterprises'
@@ -1269,7 +1269,7 @@ function LeadProfile({ lead, enterpriseId }: { lead: Lead; enterpriseId: string 
     const [paisVal, setPaisVal] = useState(lead.pais ?? 'Brasil')
 
     const router = useRouter()
-    const [callOpen, setCallOpen] = useState(false)
+    const { startCall } = useVoipStore()
 
     const updateLead = useUpdateLead()
     const { data: members } = useMembers(enterpriseId)
@@ -1349,16 +1349,6 @@ function LeadProfile({ lead, enterpriseId }: { lead: Lead; enterpriseId: string 
 
     return (
         <div className="flex flex-col h-full min-h-0">
-
-            {/* Painel de chamada VoIP */}
-            {callOpen && lead.phone && (
-                <VoipCallPanel
-                    phone={lead.phone}
-                    leadName={lead.name}
-                    enterpriseId={enterpriseId}
-                    onClose={() => setCallOpen(false)}
-                />
-            )}
 
             {/* ════ TOPO FIXO — não rola ══════════════════════════ */}
             <div className="flex flex-col shrink-0">
@@ -1446,7 +1436,7 @@ function LeadProfile({ lead, enterpriseId }: { lead: Lead; enterpriseId: string 
                                 variant="outline"
                                 size="sm"
                                 className="gap-1.5 text-xs h-7"
-                                onClick={() => setCallOpen(true)}
+                                onClick={() => lead.phone && startCall(lead.phone, lead.name, enterpriseId)}
                             >
                                 <Phone className="size-3.5" />
                                 Ligar

@@ -33,7 +33,7 @@ import { useLeads, useCreateLead, useUpdateLead, useDeleteLead, type Lead } from
 import { useListTags, useCreateTag, type Tag } from '@/services/tags'
 import { useEnterprise } from '@/hooks/use-enterprise'
 import { LeadSheet } from '@/components/lead-sheet'
-import { VoipCallPanel } from '@/components/voip-call-panel'
+import { useVoipStore } from '@/stores/voip-store'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -194,6 +194,7 @@ function LeadDialog({
 export default function LeadsPage() {
     const { enterprise } = useEnterprise()
     const router = useRouter()
+    const { startCall } = useVoipStore()
     const [search, setSearch] = useState('')
     const [query, setQuery] = useState('')
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -202,7 +203,6 @@ export default function LeadsPage() {
     const [editLead, setEditLead] = useState<Lead | null>(null)
     const [deleteLead, setDeleteLead] = useState<Lead | null>(null)
     const [sheetLead, setSheetLead] = useState<Lead | null>(null)
-    const [callLead, setCallLead] = useState<Lead | null>(null)
 
     const { data: leads = [], isLoading } = useLeads(enterprise?.id ?? '', query || undefined)
     const { mutate: remove, isPending: deleting } = useDeleteLead()
@@ -328,7 +328,7 @@ export default function LeadsPage() {
                                             <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
                                                 <button
                                                     title="Ligar"
-                                                    onClick={() => setCallLead(lead)}
+                                                    onClick={() => lead.phone && enterprise && startCall(lead.phone, lead.name, enterprise.id)}
                                                     className="shrink-0 flex items-center justify-center size-5 rounded hover:bg-primary/10 hover:text-primary transition-colors"
                                                 >
                                                     <Phone className="size-3" />
@@ -435,7 +435,7 @@ export default function LeadsPage() {
 
                                             {lead.phone && (
                                                 <DropdownMenuItem
-                                                    onClick={() => setCallLead(lead)}
+                                                    onClick={() => enterprise && startCall(lead.phone!, lead.name, enterprise.id)}
                                                     className="gap-2.5 py-2"
                                                 >
                                                     <PhoneCall className="size-4 text-muted-foreground shrink-0" />
@@ -491,16 +491,6 @@ export default function LeadsPage() {
                     onOpenChange={v => { if (!v) setEditLead(null) }}
                     initial={editLead}
                     enterpriseId={enterprise.id}
-                />
-            )}
-
-            {/* Painel de chamada VoIP */}
-            {callLead?.phone && enterprise && (
-                <VoipCallPanel
-                    phone={callLead.phone}
-                    leadName={callLead.name}
-                    enterpriseId={enterprise.id}
-                    onClose={() => setCallLead(null)}
                 />
             )}
 

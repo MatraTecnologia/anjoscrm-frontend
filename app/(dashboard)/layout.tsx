@@ -200,6 +200,17 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
             <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
                 {children}
             </div>
+
+            {/* VoIP flutuante — persiste entre navegações */}
+            <GlobalVoipPanel />
         </div>
+    )
+}
+
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+    return (
+        <VoipStoreProvider>
+            <DashboardLayoutInner>{children}</DashboardLayoutInner>
+        </VoipStoreProvider>
     )
 }

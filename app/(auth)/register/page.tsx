@@ -22,7 +22,7 @@ export default function RegisterPage() {
 
             {/* Direita — painel de marca */}
             <div className="hidden lg:flex flex-col items-center justify-center gap-8 p-12 text-center" style={{ backgroundColor: '#004B6A' }}>
-                <img src="/logo-text.svg" alt="KinarCRM" className="w-48 object-contain" />
+                <img src="/logo.png" alt="KinarCRM" className="w-48 object-contain" />
                 <div className="flex flex-col gap-3 max-w-sm">
                     <p className="text-3xl font-bold tracking-tight leading-snug" style={{ color: '#D0AB6D' }}>
                         Feche mais negócios.<br />Deixe a IA qualificar.

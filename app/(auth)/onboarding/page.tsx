@@ -188,7 +188,7 @@ export default function OnboardingPage() {
                 className="hidden lg:flex flex-col items-center justify-center gap-8 p-12 text-center"
                 style={{ backgroundColor: '#004B6A' }}
             >
-                <img src="/logo-text.svg" alt="KinarCRM" className="w-48 object-contain" />
+                <img src="/logo.png" alt="KinarCRM" className="w-48 object-contain" />
                 <div className="flex flex-col gap-3 max-w-sm">
                     <p className="text-3xl font-bold tracking-tight leading-snug" style={{ color: '#D0AB6D' }}>
                         Quase lá.<br />Vamos configurar tudo.
@@ -206,10 +206,10 @@ function StepDot({ active, done, label }: { active: boolean; done: boolean; labe
     return (
         <div className="flex flex-col items-center gap-1">
             <div className={`size-6 rounded-full flex items-center justify-center text-xs font-medium border-2 transition-colors ${done
-                    ? 'bg-primary border-primary text-primary-foreground'
-                    : active
-                        ? 'border-primary text-primary bg-background'
-                        : 'border-muted-foreground/30 text-muted-foreground bg-background'
+                ? 'bg-primary border-primary text-primary-foreground'
+                : active
+                    ? 'border-primary text-primary bg-background'
+                    : 'border-muted-foreground/30 text-muted-foreground bg-background'
                 }`}>
                 {done ? '✓' : active ? '●' : '○'}
             </div>

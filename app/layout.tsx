@@ -9,8 +9,8 @@ import { ThemeProvider } from "next-themes";
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
 export const metadata: Metadata = {
-  title: "Anjos CRM",
-  description: "Anjos CRM - Sistema de gestão de relacionamentos",
+  title: "Kinar CRM",
+  description: "Kinar CRM - Sistema de gestão de relacionamentos para empresas de consórcio",
 };
 
 export default function RootLayout({

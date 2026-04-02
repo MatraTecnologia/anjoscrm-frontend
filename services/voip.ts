@@ -115,16 +115,17 @@ export function useVoipCall(): UseVoipCallReturn {
             const tokenData = await fetchVoipToken(enterpriseId)
 
             // Cria e registra o Device
-            const device = new Device(tokenData.token, { logLevel: 'silent' })
+            // register() retorna Promise<void> na v2.x — await direto, sem timeout manual
+            const device = new Device(tokenData.token, { logLevel: 'warn' })
             deviceRef.current = device
 
-            await new Promise<void>((resolve, reject) => {
-                device.on('registered', resolve)
-                device.on('error', (err) => reject(new Error(err.message)))
-                device.register()
-                // timeout de segurança
-                setTimeout(() => reject(new Error('Timeout ao conectar ao Twilio')), 10_000)
+            device.on('error', (err) => {
+                setError(err.message ?? 'Erro no dispositivo Twilio')
+                setStatus('error')
+                deviceRef.current?.destroy()
             })
+
+            await device.register()
 
             setStatus('calling')
 

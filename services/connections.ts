@@ -6,7 +6,7 @@ import { keys } from '@/lib/keys'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type ConnectionType = 'WHATSAPP' | 'INSTAGRAM' | 'TELEGRAM' | 'WEBHOOK' | 'API'
+export type ConnectionType = 'WHATSAPP' | 'INSTAGRAM' | 'TELEGRAM' | 'WEBHOOK' | 'API' | 'VOIP'
 export type ConnectionStatus = 'CONNECTED' | 'DISCONNECTED' | 'ERROR'
 
 export type Connection = {
@@ -24,8 +24,14 @@ export type Connection = {
 export type CreateConnectionPayload = {
     name: string
     type: ConnectionType
+    // WhatsApp
     baseUrl?: string
+    adminToken?: string
     apiKey?: string
+    // VoIP
+    accountSid?: string
+    authToken?: string
+    twilioNumber?: string
 }
 
 // ─── API ──────────────────────────────────────────────────────────────────────

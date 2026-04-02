@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { useSearchParams } from 'next/navigation'
 import {
     Search, Filter, MessageCircle, Send, Loader2,
     Check, CheckCheck, Wifi, WifiOff,
@@ -53,6 +54,7 @@ import { useLead, useUpdateLead } from '@/services/leads'
 import { useMembers } from '@/services/enterprises'
 import { usePauseLead, useResumeLead, useToggleAiAgent } from '@/services/ai-agents'
 import { LeadSheet } from '@/components/lead-sheet'
+import { VoipCallPanel } from '@/components/voip-call-panel'
 import { keys } from '@/lib/keys'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -627,6 +629,7 @@ function ChatWindow({
     const [memberSearch, setMemberSearch] = useState('')
     const [mediaFile, setMediaFile] = useState<File | null>(null)
     const [mediaCaption, setMediaCaption] = useState('')
+    const [callPanelOpen, setCallPanelOpen] = useState(false)
     const [mediaPreviewUrl, setMediaPreviewUrl] = useState<string | null>(null)
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -771,7 +774,13 @@ function ChatWindow({
                 </div>
 
                 {conv.lead.phone && (
-                    <Button size="icon" variant="ghost" className="size-8 text-muted-foreground">
+                    <Button
+                        size="icon"
+                        variant="ghost"
+                        className="size-8 text-muted-foreground hover:text-green-600"
+                        title="Ligar para o lead"
+                        onClick={() => setCallPanelOpen(true)}
+                    >
                         <Phone className="size-4" />
                     </Button>
                 )}
@@ -1109,6 +1118,15 @@ function ChatWindow({
                 onOpenChange={setLeadSheetOpen}
                 onEdit={() => setLeadSheetOpen(false)}
             />
+
+            {callPanelOpen && conv.lead.phone && (
+                <VoipCallPanel
+                    phone={conv.lead.phone}
+                    leadName={conv.lead.name}
+                    enterpriseId={enterpriseId}
+                    onClose={() => setCallPanelOpen(false)}
+                />
+            )}
         </div>
     )
 }
@@ -1378,6 +1396,8 @@ export default function ChatPage() {
     const { enterprise } = useEnterprise()
     const enterpriseId = enterprise?.id ?? ''
     const queryClient = useQueryClient()
+    const searchParams = useSearchParams()
+    const leadIdParam = searchParams.get('leadId')
 
     // UI state
     const [search, setSearch] = useState('')
@@ -1407,6 +1427,13 @@ export default function ChatPage() {
     const { mutate: updateLead } = useUpdateLead()
 
     useChatSocket(enterpriseId)
+
+    // Auto-seleciona conversa quando leadId vem na URL (ex: via botão "Abrir Chat" dos leads)
+    useEffect(() => {
+        if (!leadIdParam || !conversations.length || selectedConv) return
+        const conv = conversations.find(c => c.leadId === leadIdParam)
+        if (conv) setSelectedConv(conv)
+    }, [leadIdParam, conversations]) // eslint-disable-line react-hooks/exhaustive-deps
 
     // Deriva a conversa ativa do cache ao vivo para que aiState reflita mudanças em tempo real
     const activeConv = useMemo(

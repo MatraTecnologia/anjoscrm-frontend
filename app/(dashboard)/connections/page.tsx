@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import {
     Plus, Globe, Trash2, WifiOff, QrCode, RefreshCw, Loader2,
-    Check, Wifi, Webhook,
+    Check, Wifi, Webhook, Phone,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -163,6 +163,7 @@ function QrDialog({
 
 const TYPE_OPTIONS: { value: ConnectionType; label: string; available: boolean }[] = [
     { value: 'WHATSAPP', label: 'WhatsApp', available: true },
+    { value: 'VOIP', label: 'VoIP / Telefone', available: true },
     { value: 'INSTAGRAM', label: 'Instagram', available: false },
     { value: 'TELEGRAM', label: 'Telegram', available: false },
     { value: 'WEBHOOK', label: 'Webhook', available: false },
@@ -182,6 +183,9 @@ function CreateDialog({
     const [name, setName] = useState('')
     const [baseUrl, setBaseUrl] = useState('')
     const [adminToken, setAdminToken] = useState('')
+    const [accountSid, setAccountSid] = useState('')
+    const [authToken, setAuthToken] = useState('')
+    const [twilioNumber, setTwilioNumber] = useState('')
 
     const { mutate: create, isPending } = useCreateConnection()
 
@@ -189,6 +193,9 @@ function CreateDialog({
         setName('')
         setBaseUrl('')
         setAdminToken('')
+        setAccountSid('')
+        setAuthToken('')
+        setTwilioNumber('')
         setType('WHATSAPP')
     }
 
@@ -200,6 +207,7 @@ function CreateDialog({
                 name: name.trim(),
                 type,
                 ...(type === 'WHATSAPP' ? { baseUrl: baseUrl.trim(), adminToken: adminToken.trim() } : {}),
+                ...(type === 'VOIP' ? { accountSid: accountSid.trim(), authToken: authToken.trim(), twilioNumber: twilioNumber.trim() } : {}),
             },
         }, {
             onSuccess: () => {
@@ -211,7 +219,9 @@ function CreateDialog({
         })
     }
 
-    const canSubmit = name.trim() && (type !== 'WHATSAPP' || (baseUrl.trim() && adminToken.trim()))
+    const canSubmit = name.trim()
+        && (type !== 'WHATSAPP' || (baseUrl.trim() && adminToken.trim()))
+        && (type !== 'VOIP' || (accountSid.trim() && authToken.trim() && twilioNumber.trim()))
 
     return (
         <Dialog open={open} onOpenChange={v => { if (!v) { reset(); onClose() } }}>
@@ -267,9 +277,7 @@ function CreateDialog({
                     {type === 'WHATSAPP' && (
                         <>
                             <div className="flex flex-col gap-1.5">
-                                <Label htmlFor="conn-baseurl">
-                                    URL do Uazap *
-                                </Label>
+                                <Label htmlFor="conn-baseurl">URL do Uazap *</Label>
                                 <Input
                                     id="conn-baseurl"
                                     placeholder="https://api.seuuazap.com"
@@ -296,6 +304,56 @@ function CreateDialog({
                                 />
                                 <p className="text-xs text-muted-foreground">
                                     Token de administrador do seu servidor uazapiGO
+                                </p>
+                            </div>
+                        </>
+                    )}
+
+                    {/* Campos específicos do VoIP (Twilio) */}
+                    {type === 'VOIP' && (
+                        <>
+                            <div className="rounded-lg bg-muted/50 border px-3 py-2.5 text-xs text-muted-foreground leading-relaxed">
+                                Acesse <strong>console.twilio.com</strong> → copie o <strong>Account SID</strong> e <strong>Auth Token</strong> da dashboard principal.
+                                O número deve estar no formato <strong>+5511...</strong>
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                                <Label htmlFor="conn-sid">Account SID *</Label>
+                                <Input
+                                    id="conn-sid"
+                                    placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                                    value={accountSid}
+                                    onChange={e => setAccountSid(e.target.value)}
+                                    disabled={isPending}
+                                    required
+                                />
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                                <Label htmlFor="conn-authtoken">Auth Token *</Label>
+                                <Input
+                                    id="conn-authtoken"
+                                    type="password"
+                                    placeholder="••••••••••••••••••••••••••••••••"
+                                    value={authToken}
+                                    onChange={e => setAuthToken(e.target.value)}
+                                    disabled={isPending}
+                                    required
+                                />
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                                <Label htmlFor="conn-twilio-number">Número Twilio *</Label>
+                                <Input
+                                    id="conn-twilio-number"
+                                    placeholder="+5511999998888"
+                                    value={twilioNumber}
+                                    onChange={e => setTwilioNumber(e.target.value)}
+                                    disabled={isPending}
+                                    required
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                    Número comprado no Twilio, com código do país (+55 para Brasil)
                                 </p>
                             </div>
                         </>
@@ -352,6 +410,7 @@ function ConnectionCard({
     }
 
     const isWhatsApp = connection.type === 'WHATSAPP'
+    const isVoip = connection.type === 'VOIP'
     const isConnected = connection.status === 'CONNECTED'
 
     return (
@@ -360,12 +419,13 @@ function ConnectionCard({
                 {/* Ícone */}
                 <div className={cn(
                     'flex size-10 shrink-0 items-center justify-center rounded-lg',
-                    isWhatsApp ? 'bg-green-500/10 text-green-500' : 'bg-muted text-muted-foreground',
+                    isWhatsApp ? 'bg-green-500/10 text-green-500'
+                    : isVoip ? 'bg-blue-500/10 text-blue-500'
+                    : 'bg-muted text-muted-foreground',
                 )}>
-                    {isWhatsApp
-                        ? <WhatsAppIcon className="size-5" />
-                        : <Globe className="size-5" />
-                    }
+                    {isWhatsApp ? <WhatsAppIcon className="size-5" />
+                    : isVoip ? <Phone className="size-5" />
+                    : <Globe className="size-5" />}
                 </div>
 
                 {/* Info */}

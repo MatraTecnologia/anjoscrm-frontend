@@ -3,7 +3,10 @@ import axios from 'axios'
 export const api = axios.create({
     baseURL: process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3333',
     withCredentials: true, // necessário para cookies de sessão do Better Auth
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true', // ignora a página de aviso do ngrok gratuito
+    },
 })
 
 // Interceptor global de erro — extrai mensagem e redireciona em 401

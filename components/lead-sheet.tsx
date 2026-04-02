@@ -11,7 +11,7 @@ import {
     SlidersHorizontal, MessageSquarePlus, Send, Tag,
     ShoppingCart, MoreHorizontal, Check, Clock, X,
     Camera, Copy, ExternalLink, Calendar, CheckCircle2, Circle,
-    Activity as ActivityIcon,
+    Activity as ActivityIcon, Phone,
 } from 'lucide-react'
 import type { Value as PhoneValue } from 'react-phone-number-input'
 import Cropper from 'react-easy-crop'
@@ -35,6 +35,8 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 
+import { useRouter } from 'next/navigation'
+import { VoipCallPanel } from '@/components/voip-call-panel'
 import type { Lead } from '@/services/leads'
 import { useUpdateLead } from '@/services/leads'
 import { useMembers } from '@/services/enterprises'
@@ -1266,6 +1268,9 @@ function LeadProfile({ lead, enterpriseId }: { lead: Lead; enterpriseId: string 
     const [ufVal, setUfVal] = useState(lead.uf ?? '')
     const [paisVal, setPaisVal] = useState(lead.pais ?? 'Brasil')
 
+    const router = useRouter()
+    const [callOpen, setCallOpen] = useState(false)
+
     const updateLead = useUpdateLead()
     const { data: members } = useMembers(enterpriseId)
     const addNote = useAddLeadComment(lead.id, enterpriseId)
@@ -1345,6 +1350,16 @@ function LeadProfile({ lead, enterpriseId }: { lead: Lead; enterpriseId: string 
     return (
         <div className="flex flex-col h-full min-h-0">
 
+            {/* Painel de chamada VoIP */}
+            {callOpen && lead.phone && (
+                <VoipCallPanel
+                    phone={lead.phone}
+                    leadName={lead.name}
+                    enterpriseId={enterpriseId}
+                    onClose={() => setCallOpen(false)}
+                />
+            )}
+
             {/* ════ TOPO FIXO — não rola ══════════════════════════ */}
             <div className="flex flex-col shrink-0">
 
@@ -1422,6 +1437,32 @@ function LeadProfile({ lead, enterpriseId }: { lead: Lead; enterpriseId: string 
                         </button>
                     </div>
                 </div>
+
+                {/* Ações rápidas: ligar / chat */}
+                {(lead.phone || lead.email) && (
+                    <div className="flex gap-2 justify-center pb-3">
+                        {lead.phone && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="gap-1.5 text-xs h-7"
+                                onClick={() => setCallOpen(true)}
+                            >
+                                <Phone className="size-3.5" />
+                                Ligar
+                            </Button>
+                        )}
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-1.5 text-xs h-7"
+                            onClick={() => router.push(`/chat?leadId=${lead.id}`)}
+                        >
+                            <MessageCircle className="size-3.5 text-green-500" />
+                            WhatsApp
+                        </Button>
+                    </div>
+                )}
 
                 {/* + Adicionar listas */}
                 <button className="flex items-center gap-2 px-4 py-2.5 text-xs text-muted-foreground hover:bg-muted/30 transition-colors border-y">

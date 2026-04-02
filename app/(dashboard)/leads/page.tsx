@@ -1,10 +1,11 @@
 'use client'
 
 import { useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import {
     Plus, Search, Phone, Mail, MoreHorizontal,
-    Pencil, Briefcase, MessageCircle, Trash2, Loader2,
+    Pencil, Briefcase, MessageCircle, Trash2, Loader2, PhoneCall,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -32,6 +33,7 @@ import { useLeads, useCreateLead, useUpdateLead, useDeleteLead, type Lead } from
 import { useListTags, useCreateTag, type Tag } from '@/services/tags'
 import { useEnterprise } from '@/hooks/use-enterprise'
 import { LeadSheet } from '@/components/lead-sheet'
+import { VoipCallPanel } from '@/components/voip-call-panel'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -191,6 +193,7 @@ function LeadDialog({
 
 export default function LeadsPage() {
     const { enterprise } = useEnterprise()
+    const router = useRouter()
     const [search, setSearch] = useState('')
     const [query, setQuery] = useState('')
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -199,6 +202,7 @@ export default function LeadsPage() {
     const [editLead, setEditLead] = useState<Lead | null>(null)
     const [deleteLead, setDeleteLead] = useState<Lead | null>(null)
     const [sheetLead, setSheetLead] = useState<Lead | null>(null)
+    const [callLead, setCallLead] = useState<Lead | null>(null)
 
     const { data: leads = [], isLoading } = useLeads(enterprise?.id ?? '', query || undefined)
     const { mutate: remove, isPending: deleting } = useDeleteLead()
@@ -318,12 +322,25 @@ export default function LeadsPage() {
                                 </td>
 
                                 {/* Contatos */}
-                                <td className="px-4 py-3">
+                                <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                                     <div className="flex flex-col gap-1">
                                         {lead.phone && (
                                             <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                                                <Phone className="size-3 shrink-0" />
+                                                <button
+                                                    title="Ligar"
+                                                    onClick={() => setCallLead(lead)}
+                                                    className="shrink-0 flex items-center justify-center size-5 rounded hover:bg-primary/10 hover:text-primary transition-colors"
+                                                >
+                                                    <Phone className="size-3" />
+                                                </button>
                                                 <span className="truncate max-w-36">{lead.phone}</span>
+                                                <button
+                                                    title="WhatsApp"
+                                                    onClick={() => router.push(`/chat?leadId=${lead.id}`)}
+                                                    className="shrink-0 flex items-center justify-center size-5 rounded hover:bg-green-500/10 hover:text-green-500 transition-colors"
+                                                >
+                                                    <MessageCircle className="size-3" />
+                                                </button>
                                             </span>
                                         )}
                                         {lead.email && (
@@ -405,13 +422,29 @@ export default function LeadsPage() {
                                                 </div>
                                             </DropdownMenuItem>
 
-                                            <DropdownMenuItem disabled className="gap-2.5 py-2">
-                                                <MessageCircle className="size-4 text-muted-foreground shrink-0" />
+                                            <DropdownMenuItem
+                                                onClick={() => router.push(`/chat?leadId=${lead.id}`)}
+                                                className="gap-2.5 py-2"
+                                            >
+                                                <MessageCircle className="size-4 text-green-500 shrink-0" />
                                                 <div>
                                                     <p className="font-medium text-sm">Abrir Chat</p>
-                                                    <p className="text-xs text-muted-foreground">Abrir conversa no chat express</p>
+                                                    <p className="text-xs text-muted-foreground">Abrir conversa no WhatsApp</p>
                                                 </div>
                                             </DropdownMenuItem>
+
+                                            {lead.phone && (
+                                                <DropdownMenuItem
+                                                    onClick={() => setCallLead(lead)}
+                                                    className="gap-2.5 py-2"
+                                                >
+                                                    <PhoneCall className="size-4 text-muted-foreground shrink-0" />
+                                                    <div>
+                                                        <p className="font-medium text-sm">Ligar</p>
+                                                        <p className="text-xs text-muted-foreground">Iniciar chamada VoIP</p>
+                                                    </div>
+                                                </DropdownMenuItem>
+                                            )}
 
                                             <DropdownMenuSeparator />
 
@@ -458,6 +491,16 @@ export default function LeadsPage() {
                     onOpenChange={v => { if (!v) setEditLead(null) }}
                     initial={editLead}
                     enterpriseId={enterprise.id}
+                />
+            )}
+
+            {/* Painel de chamada VoIP */}
+            {callLead?.phone && enterprise && (
+                <VoipCallPanel
+                    phone={callLead.phone}
+                    leadName={callLead.name}
+                    enterpriseId={enterprise.id}
+                    onClose={() => setCallLead(null)}
                 />
             )}
 

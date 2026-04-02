@@ -78,8 +78,8 @@ export default function OnboardingPage() {
             <div className="flex flex-col gap-4 p-6 md:p-10">
                 <div className="flex justify-center md:justify-start">
                     <a href="#" className="flex items-center gap-2">
-                        <Image src="/logo.png" alt="AnjosCRM" width={28} height={28} className="w-7 h-7 object-contain" />
-                        <span className="font-semibold text-sm">AnjosCRM</span>
+                        <Image src="/logo.png" alt="KinarCRM" width={28} height={28} className="w-7 h-7 object-contain" />
+                        <span className="font-semibold text-sm">KinarCRM</span>
                     </a>
                 </div>
 
@@ -188,13 +188,13 @@ export default function OnboardingPage() {
                 className="hidden lg:flex flex-col items-center justify-center gap-8 p-12 text-center"
                 style={{ backgroundColor: '#004B6A' }}
             >
-                <img src="/logo-text.svg" alt="AnjosCRM" className="w-48 object-contain" />
+                <img src="/logo-text.svg" alt="KinarCRM" className="w-48 object-contain" />
                 <div className="flex flex-col gap-3 max-w-sm">
                     <p className="text-3xl font-bold tracking-tight leading-snug" style={{ color: '#D0AB6D' }}>
                         Quase lá.<br />Vamos configurar tudo.
                     </p>
                     <p className="text-sm leading-relaxed" style={{ color: 'rgba(208,171,109,0.6)' }}>
-                        Adicione sua foto e configure sua empresa para começar a usar o AnjosCRM.
+                        Adicione sua foto e configure sua empresa para começar a usar o KinarCRM.
                     </p>
                 </div>
             </div>
@@ -205,13 +205,12 @@ export default function OnboardingPage() {
 function StepDot({ active, done, label }: { active: boolean; done: boolean; label: string }) {
     return (
         <div className="flex flex-col items-center gap-1">
-            <div className={`size-6 rounded-full flex items-center justify-center text-xs font-medium border-2 transition-colors ${
-                done
+            <div className={`size-6 rounded-full flex items-center justify-center text-xs font-medium border-2 transition-colors ${done
                     ? 'bg-primary border-primary text-primary-foreground'
                     : active
                         ? 'border-primary text-primary bg-background'
                         : 'border-muted-foreground/30 text-muted-foreground bg-background'
-            }`}>
+                }`}>
                 {done ? '✓' : active ? '●' : '○'}
             </div>
             <span className={`text-xs ${active || done ? 'text-foreground' : 'text-muted-foreground'}`}>{label}</span>

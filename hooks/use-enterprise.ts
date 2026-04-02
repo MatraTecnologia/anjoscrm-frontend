@@ -1,6 +1,6 @@
 import { useVerify } from '@/services/enterprises'
 
-const STORAGE_KEY = 'anjoscrm:active-enterprise'
+const STORAGE_KEY = 'kinarcrm:active-enterprise'
 
 export function getActiveEnterpriseId(enterprises: { id: string }[]): string {
     if (typeof window === 'undefined') return enterprises[0]?.id ?? ''

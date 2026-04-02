@@ -67,7 +67,7 @@ export function VoipCallPanel({ phone, leadName, enterpriseId, onClose }: Props)
     }, [status, onClose])
 
     return (
-        <div className="fixed bottom-6 right-6 z-50 w-72 rounded-2xl border bg-background shadow-2xl overflow-hidden">
+        <div className="fixed bottom-6 right-6 z-[200] w-72 rounded-2xl border bg-background shadow-2xl overflow-hidden">
 
             {/* Barra de status colorida */}
             <div className={cn(

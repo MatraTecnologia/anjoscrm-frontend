@@ -3,6 +3,7 @@
 import Image from 'next/image'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { AIBackground } from '@/components/ai-background'
 import { toast } from 'sonner'
 import { Mail, Loader2, CheckCircle2 } from 'lucide-react'
 
@@ -136,18 +137,20 @@ export default function VerifyPage() {
                 </div>
             </div>
 
-            {/* Direita — painel de marca */}
-            <div className="hidden lg:flex flex-col items-center justify-center gap-8 p-12 text-center" style={{ backgroundColor: '#004B6A' }}>
-                <img src="/logo.png" alt="KinarCRM" className="w-48 object-contain" />
+            {/* Direita — painel animado IA */}
+            <AIBackground className="hidden lg:block">
+                <div className="flex flex-col items-center justify-center gap-8 p-12 text-center h-full min-h-svh">
+                <img src="/logo.png" alt="KinarCRM" className="w-48 object-contain drop-shadow-2xl" />
                 <div className="flex flex-col gap-3 max-w-sm">
                     <p className="text-3xl font-bold tracking-tight leading-snug" style={{ color: '#D0AB6D' }}>
                         Feche mais negócios.<br />Deixe a IA qualificar.
                     </p>
-                    <p className="text-sm leading-relaxed" style={{ color: 'rgba(208,171,109,0.6)' }}>
+                    <p className="text-sm leading-relaxed" style={{ color: 'rgba(208,171,109,0.55)' }}>
                         O KinarCRM responde seus leads automaticamente e entrega os melhores para o seu time fechar.
                     </p>
                 </div>
-            </div>
+                </div>
+            </AIBackground>
         </div>
     )
 }

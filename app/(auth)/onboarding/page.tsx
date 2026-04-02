@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import { AIBackground } from '@/components/ai-background'
 import { Loader2, Building2, Mail } from 'lucide-react'
 import Image from 'next/image'
 
@@ -183,21 +184,20 @@ export default function OnboardingPage() {
                 </div>
             </div>
 
-            {/* Direita — painel de marca */}
-            <div
-                className="hidden lg:flex flex-col items-center justify-center gap-8 p-12 text-center"
-                style={{ backgroundColor: '#004B6A' }}
-            >
-                <img src="/logo.png" alt="KinarCRM" className="w-48 object-contain" />
-                <div className="flex flex-col gap-3 max-w-sm">
-                    <p className="text-3xl font-bold tracking-tight leading-snug" style={{ color: '#D0AB6D' }}>
-                        Quase lá.<br />Vamos configurar tudo.
-                    </p>
-                    <p className="text-sm leading-relaxed" style={{ color: 'rgba(208,171,109,0.6)' }}>
-                        Adicione sua foto e configure sua empresa para começar a usar o KinarCRM.
-                    </p>
+            {/* Direita — painel animado IA */}
+            <AIBackground className="hidden lg:block">
+                <div className="flex flex-col items-center justify-center gap-8 p-12 text-center h-full min-h-svh">
+                    <img src="/logo.png" alt="KinarCRM" className="w-48 object-contain drop-shadow-2xl" />
+                    <div className="flex flex-col gap-3 max-w-sm">
+                        <p className="text-3xl font-bold tracking-tight leading-snug" style={{ color: '#D0AB6D' }}>
+                            Quase lá.<br />Vamos configurar tudo.
+                        </p>
+                        <p className="text-sm leading-relaxed" style={{ color: 'rgba(208,171,109,0.55)' }}>
+                            Adicione sua foto e configure sua empresa para começar a usar o KinarCRM.
+                        </p>
+                    </div>
                 </div>
-            </div>
+            </AIBackground>
         </div>
     )
 }

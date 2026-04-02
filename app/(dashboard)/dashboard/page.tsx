@@ -247,7 +247,7 @@ export default function DashboardPage() {
             y: { formatter: negMetric === 'Valor' ? (v) => fmtBRL(Number(v)) : (v) => String(v) },
             theme: 'light',
         },
-        colors: ['#004B6A'],
+        colors: ['#1535C8'],
     }
 
     // Donut
@@ -260,7 +260,7 @@ export default function DashboardPage() {
         labels: donutLabels,
         dataLabels: { enabled: false },
         legend: { show: false },
-        colors: ['#004B6A', '#0077a8', '#00aacc', '#66ccdd', '#99ddee'],
+        colors: ['#1535C8', '#2a4fd6', '#4067e0', '#6685e8', '#99aaee'],
         plotOptions: {
             pie: { donut: { size: '68%', labels: { show: false } } },
         },
@@ -460,7 +460,7 @@ export default function DashboardPage() {
                                                 <div key={a.id} className="flex items-center gap-2 text-xs">
                                                     <span
                                                         className="size-2 rounded-full shrink-0"
-                                                        style={{ backgroundColor: ['#004B6A','#0077a8','#00aacc','#66ccdd','#99ddee'][i % 5] }}
+                                                        style={{ backgroundColor: ['#1535C8','#2a4fd6','#4067e0','#6685e8','#99aaee'][i % 5] }}
                                                     />
                                                     <span className="flex-1 truncate text-muted-foreground">{a.name}</span>
                                                     <span className="font-medium">

@@ -105,7 +105,7 @@ async function resendVerificationEmailFn(email: string): Promise<void> {
 }
 
 async function sendMagicLinkFn(email: string): Promise<void> {
-    await api.post('/auth/magic-link/send-magic-link', { email })
+    await api.post('/auth/sign-in/magic-link', { email })
 }
 
 async function sendSignInOTPFn(email: string): Promise<void> {

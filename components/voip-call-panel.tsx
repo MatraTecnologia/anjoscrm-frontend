@@ -66,12 +66,11 @@ export function VoipCallPanel({ phone, leadName, enterpriseId, onClose }: Props)
     const isEnded = status === 'ended' || status === 'error'
     const isLoading = status === 'connecting' || status === 'calling' || status === 'ringing'
 
-    // Fecha automaticamente após encerrar
+    // Fecha automaticamente 3s após encerrar
     useEffect(() => {
-        if (status === 'ended') {
-            const t = setTimeout(onClose, 3000)
-            return () => clearTimeout(t)
-        }
+        if (status !== 'ended' && status !== 'error') return
+        const t = setTimeout(onClose, 3000)
+        return () => clearTimeout(t)
     }, [status, onClose])
 
     return (

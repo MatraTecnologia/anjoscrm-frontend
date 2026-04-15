@@ -87,15 +87,14 @@ export function useVoipCall(onCallSid?: (sid: string) => void): UseVoipCallRetur
     }, [])
 
     const hangup = useCallback(() => {
-        callRef.current?.disconnect()
-        deviceRef.current?.destroy()
+        try { callRef.current?.disconnect() } catch { /* ignora */ }
+        try { deviceRef.current?.destroy() } catch { /* ignora */ }
         deviceRef.current = null
         callRef.current = null
         clearTimer()
         setStatus('ended')
         setIsMuted(false)
         setCallSid(null)
-        setTimeout(() => setStatus('idle'), 2000)
     }, [])
 
     const toggleMute = useCallback(() => {

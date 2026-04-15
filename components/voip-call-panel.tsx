@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect } from 'react'
-import { Phone, PhoneOff, Mic, MicOff, Loader2 } from 'lucide-react'
+import { useEffect, useRef } from 'react'
+import { Phone, PhoneOff, Mic, MicOff, Loader2, MessageSquare } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
 import { useVoipCall, formatDuration, type CallStatus } from '@/services/voip'
+import { useVoipStore } from '@/stores/voip-store'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -47,12 +47,20 @@ function PulsingRing({ active }: { active: boolean }) {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function VoipCallPanel({ phone, leadName, enterpriseId, onClose }: Props) {
-    const { status, duration, error, isMuted, startCall, hangup, toggleMute } = useVoipCall()
+    const { setCallSid, transcript } = useVoipStore()
+    const { status, duration, error, isMuted, startCall, hangup, toggleMute } = useVoipCall(setCallSid)
+
+    const transcriptEndRef = useRef<HTMLDivElement>(null)
 
     // Inicia a chamada ao montar
     useEffect(() => {
         startCall(phone, enterpriseId)
     }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Auto-scroll na transcrição
+    useEffect(() => {
+        transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }, [transcript])
 
     const isActive = status === 'connected'
     const isEnded = status === 'ended' || status === 'error'
@@ -61,13 +69,16 @@ export function VoipCallPanel({ phone, leadName, enterpriseId, onClose }: Props)
     // Fecha automaticamente após encerrar
     useEffect(() => {
         if (status === 'ended') {
-            const t = setTimeout(onClose, 2000)
+            const t = setTimeout(onClose, 3000)
             return () => clearTimeout(t)
         }
     }, [status, onClose])
 
     return (
-        <div className="fixed bottom-6 right-6 z-[200] w-72 rounded-2xl border bg-background shadow-2xl overflow-hidden">
+        <div className={cn(
+            'fixed bottom-6 right-6 z-[200] rounded-2xl border bg-background shadow-2xl overflow-hidden transition-all duration-300',
+            transcript.length > 0 ? 'w-80' : 'w-72',
+        )}>
 
             {/* Barra de status colorida */}
             <div className={cn(
@@ -77,10 +88,10 @@ export function VoipCallPanel({ phone, leadName, enterpriseId, onClose }: Props)
 
             <div className="p-5">
                 {/* Avatar + info do lead */}
-                <div className="flex flex-col items-center gap-3 mb-6">
+                <div className="flex flex-col items-center gap-3 mb-4">
                     <div className="relative">
                         <div className={cn(
-                            'size-16 rounded-full flex items-center justify-center text-2xl font-bold text-white transition-all',
+                            'size-14 rounded-full flex items-center justify-center text-xl font-bold text-white transition-all',
                             isActive ? 'bg-green-500' : 'bg-muted-foreground/30',
                         )}>
                             {leadName[0]?.toUpperCase() ?? '?'}
@@ -95,7 +106,7 @@ export function VoipCallPanel({ phone, leadName, enterpriseId, onClose }: Props)
                 </div>
 
                 {/* Status + timer */}
-                <div className="flex flex-col items-center gap-1 mb-6">
+                <div className="flex flex-col items-center gap-1 mb-4">
                     <div className="flex items-center gap-1.5">
                         {isLoading && <Loader2 className="size-3.5 animate-spin text-blue-500" />}
                         <span className={cn('text-sm font-medium', STATUS_COLOR[status])}>
@@ -111,6 +122,56 @@ export function VoipCallPanel({ phone, leadName, enterpriseId, onClose }: Props)
                         <p className="text-xs text-destructive text-center max-w-[200px]">{error}</p>
                     )}
                 </div>
+
+                {/* Transcrição ao vivo */}
+                {(isActive || transcript.length > 0) && (
+                    <div className="mb-4">
+                        <div className="flex items-center gap-1.5 mb-2">
+                            <MessageSquare className="size-3 text-muted-foreground" />
+                            <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                                Transcrição ao vivo
+                            </span>
+                            {isActive && transcript.length === 0 && (
+                                <span className="flex gap-0.5 ml-auto">
+                                    <span className="size-1.5 rounded-full bg-green-500 animate-bounce [animation-delay:0ms]" />
+                                    <span className="size-1.5 rounded-full bg-green-500 animate-bounce [animation-delay:150ms]" />
+                                    <span className="size-1.5 rounded-full bg-green-500 animate-bounce [animation-delay:300ms]" />
+                                </span>
+                            )}
+                        </div>
+
+                        <div className="max-h-40 overflow-y-auto rounded-xl bg-muted/50 p-2.5 space-y-2 text-xs">
+                            {transcript.length === 0 ? (
+                                <p className="text-muted-foreground text-center py-2 italic">
+                                    Aguardando fala...
+                                </p>
+                            ) : (
+                                transcript.map((seg, i) => (
+                                    <div key={i} className={cn(
+                                        'flex gap-2',
+                                        seg.speaker === 'agent' ? 'flex-row-reverse' : 'flex-row',
+                                    )}>
+                                        <div className={cn(
+                                            'max-w-[85%] px-2.5 py-1.5 rounded-xl leading-snug',
+                                            seg.speaker === 'agent'
+                                                ? 'bg-primary text-primary-foreground rounded-tr-sm'
+                                                : 'bg-background border rounded-tl-sm',
+                                        )}>
+                                            <p className={cn(
+                                                'text-[9px] font-medium mb-0.5 opacity-70',
+                                                seg.speaker === 'agent' ? 'text-right' : 'text-left',
+                                            )}>
+                                                {seg.speaker === 'agent' ? 'Você' : leadName}
+                                            </p>
+                                            <p>{seg.text}</p>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                            <div ref={transcriptEndRef} />
+                        </div>
+                    </div>
+                )}
 
                 {/* Controles */}
                 <div className="flex items-center justify-center gap-4">

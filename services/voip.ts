@@ -50,16 +50,18 @@ export type UseVoipCallReturn = {
     duration: number          // segundos em ligação
     error: string | null
     isMuted: boolean
+    callSid: string | null
     startCall: (phone: string, enterpriseId: string) => Promise<void>
     hangup: () => void
     toggleMute: () => void
 }
 
-export function useVoipCall(): UseVoipCallReturn {
+export function useVoipCall(onCallSid?: (sid: string) => void): UseVoipCallReturn {
     const [status, setStatus] = useState<CallStatus>('idle')
     const [duration, setDuration] = useState(0)
     const [error, setError] = useState<string | null>(null)
     const [isMuted, setIsMuted] = useState(false)
+    const [callSid, setCallSid] = useState<string | null>(null)
 
     // Armazenamos Device e Call como refs para não causar re-renders
     const deviceRef = useRef<import('@twilio/voice-sdk').Device | null>(null)
@@ -92,6 +94,7 @@ export function useVoipCall(): UseVoipCallReturn {
         clearTimer()
         setStatus('ended')
         setIsMuted(false)
+        setCallSid(null)
         setTimeout(() => setStatus('idle'), 2000)
     }, [])
 
@@ -139,7 +142,16 @@ export function useVoipCall(): UseVoipCallReturn {
             callRef.current = call
 
             call.on('ringing', () => setStatus('ringing'))
-            call.on('accept', () => { setStatus('connected'); startTimer() })
+            call.on('accept', () => {
+                setStatus('connected')
+                startTimer()
+                // Captura o CallSid para a sala de transcrição
+                const sid = call.parameters?.CallSid as string | undefined
+                if (sid) {
+                    setCallSid(sid)
+                    onCallSid?.(sid)
+                }
+            })
             call.on('disconnect', () => hangup())
             call.on('error', (err) => {
                 setError(err.message)
@@ -155,7 +167,7 @@ export function useVoipCall(): UseVoipCallReturn {
         }
     }, [hangup])
 
-    return { status, duration, error, isMuted, startCall, hangup, toggleMute }
+    return { status, duration, error, isMuted, callSid, startCall, hangup, toggleMute }
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

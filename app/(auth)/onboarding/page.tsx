@@ -40,7 +40,8 @@ export default function OnboardingPage() {
             return
         }
 
-        setStep('photo')
+        // Só avança de 'loading' para 'photo' — nunca volta atrás se o usuário já avançou manualmente
+        setStep(s => s === 'loading' ? 'photo' : s)
     }, [isLoading, session, verify, router])
 
     function handleCreateEnterprise(e: React.FormEvent<HTMLFormElement>) {

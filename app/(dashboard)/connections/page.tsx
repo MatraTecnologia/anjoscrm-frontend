@@ -4,7 +4,9 @@ import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import {
     Plus, Globe, Trash2, WifiOff, QrCode, RefreshCw, Loader2,
-    Check, Wifi, Webhook, Phone,
+    Check, Wifi, Webhook, Phone, Zap, ShieldCheck, Clock,
+    CreditCard, ExternalLink, MessageSquare, Sparkles, ArrowRight,
+    AlertCircle, Ban,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -23,8 +25,12 @@ import { useEnterprise } from '@/hooks/use-enterprise'
 import {
     useConnections, useCreateConnection, useDeleteConnection,
     useConnectionQr, useConnectionStatus, useDisconnect, useConfigureWebhook,
-    type Connection, type ConnectionType,
+    type Connection,
 } from '@/services/connections'
+import {
+    useWhatsappSubscriptions, useCreateWhatsappSubscription, useCancelWhatsappSubscription,
+    type WhatsappSubscription,
+} from '@/services/subscriptions'
 import { cn } from '@/lib/utils'
 
 // ─── WhatsApp icon ────────────────────────────────────────────────────────────
@@ -54,6 +60,41 @@ function StatusBadge({ status }: { status: Connection['status'] }) {
     return (
         <Badge variant="secondary" className="text-xs">
             Desconectado
+        </Badge>
+    )
+}
+
+// ─── Sub status badge ─────────────────────────────────────────────────────────
+
+function SubStatusBadge({ status }: { status: WhatsappSubscription['status'] }) {
+    if (status === 'ACTIVE') {
+        return (
+            <Badge className="gap-1 bg-green-500/10 text-green-600 border-green-500/20 hover:bg-green-500/10 text-xs">
+                <span className="size-1.5 rounded-full bg-green-500 animate-pulse" />
+                Ativa
+            </Badge>
+        )
+    }
+    if (status === 'PENDING_PAYMENT') {
+        return (
+            <Badge className="gap-1 bg-amber-500/10 text-amber-600 border-amber-500/20 hover:bg-amber-500/10 text-xs">
+                <Clock className="size-3" />
+                Aguardando pagamento
+            </Badge>
+        )
+    }
+    if (status === 'SUSPENDED') {
+        return (
+            <Badge className="gap-1 bg-red-500/10 text-red-600 border-red-500/20 hover:bg-red-500/10 text-xs">
+                <AlertCircle className="size-3" />
+                Suspensa
+            </Badge>
+        )
+    }
+    return (
+        <Badge variant="secondary" className="gap-1 text-xs">
+            <Ban className="size-3" />
+            Cancelada
         </Badge>
     )
 }
@@ -122,7 +163,7 @@ function QrDialog({
                         <div className="flex size-52 flex-col items-center justify-center gap-3 rounded-lg bg-muted text-muted-foreground">
                             <QrCode className="size-8" />
                             <p className="text-xs text-center px-4">
-                                Não foi possível carregar o QR Code. Verifique a URL e a API Key do Uazap.
+                                Não foi possível carregar o QR Code. Tente novamente em instantes.
                             </p>
                         </div>
                     ) : (
@@ -159,18 +200,9 @@ function QrDialog({
     )
 }
 
-// ─── Create dialog ────────────────────────────────────────────────────────────
+// ─── Purchase dialog (VoIP/Twilio) ────────────────────────────────────────────
 
-const TYPE_OPTIONS: { value: ConnectionType; label: string; available: boolean }[] = [
-    { value: 'WHATSAPP', label: 'WhatsApp', available: true },
-    { value: 'VOIP', label: 'VoIP / Telefone', available: true },
-    { value: 'INSTAGRAM', label: 'Instagram', available: false },
-    { value: 'TELEGRAM', label: 'Telegram', available: false },
-    { value: 'WEBHOOK', label: 'Webhook', available: false },
-    { value: 'API', label: 'API', available: false },
-]
-
-function CreateDialog({
+function VoipDialog({
     enterpriseId,
     open,
     onClose,
@@ -179,10 +211,7 @@ function CreateDialog({
     open: boolean
     onClose: () => void
 }) {
-    const [type, setType] = useState<ConnectionType>('WHATSAPP')
     const [name, setName] = useState('')
-    const [baseUrl, setBaseUrl] = useState('')
-    const [adminToken, setAdminToken] = useState('')
     const [accountSid, setAccountSid] = useState('')
     const [authToken, setAuthToken] = useState('')
     const [twilioNumber, setTwilioNumber] = useState('')
@@ -190,184 +219,56 @@ function CreateDialog({
     const { mutate: create, isPending } = useCreateConnection()
 
     function reset() {
-        setName('')
-        setBaseUrl('')
-        setAdminToken('')
-        setAccountSid('')
-        setAuthToken('')
-        setTwilioNumber('')
-        setType('WHATSAPP')
+        setName(''); setAccountSid(''); setAuthToken(''); setTwilioNumber('')
     }
 
     function handleCreate(e: React.FormEvent) {
         e.preventDefault()
         create({
             enterpriseId,
-            payload: {
-                name: name.trim(),
-                type,
-                ...(type === 'WHATSAPP' ? { baseUrl: baseUrl.trim(), adminToken: adminToken.trim() } : {}),
-                ...(type === 'VOIP' ? { accountSid: accountSid.trim(), authToken: authToken.trim(), twilioNumber: twilioNumber.trim() } : {}),
-            },
+            payload: { name: name.trim(), type: 'VOIP', accountSid: accountSid.trim(), authToken: authToken.trim(), twilioNumber: twilioNumber.trim() },
         }, {
-            onSuccess: () => {
-                toast.success('Conexão criada!')
-                reset()
-                onClose()
-            },
+            onSuccess: () => { toast.success('Conexão VoIP criada!'); reset(); onClose() },
             onError: (err: Error) => toast.error(err.message),
         })
     }
 
-    const canSubmit = name.trim()
-        && (type !== 'WHATSAPP' || (baseUrl.trim() && adminToken.trim()))
-        && (type !== 'VOIP' || (accountSid.trim() && authToken.trim() && twilioNumber.trim()))
+    const canSubmit = name.trim() && accountSid.trim() && authToken.trim() && twilioNumber.trim()
 
     return (
         <Dialog open={open} onOpenChange={v => { if (!v) { reset(); onClose() } }}>
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
-                    <DialogTitle>Nova Conexão</DialogTitle>
+                    <DialogTitle className="flex items-center gap-2">
+                        <Phone className="size-4 text-blue-500" />
+                        Conectar VoIP / Twilio
+                    </DialogTitle>
                 </DialogHeader>
-
                 <form onSubmit={handleCreate} className="flex flex-col gap-4 py-1">
-                    {/* Tipo */}
-                    <div className="flex flex-col gap-1.5">
-                        <Label>Tipo</Label>
-                        <div className="flex gap-2 flex-wrap">
-                            {TYPE_OPTIONS.map(({ value, label, available }) => (
-                                <button
-                                    key={value}
-                                    type="button"
-                                    disabled={!available}
-                                    onClick={() => setType(value)}
-                                    className={cn(
-                                        'rounded border px-3 py-1.5 text-xs font-medium transition-colors',
-                                        type === value && available
-                                            ? 'bg-primary text-primary-foreground border-primary'
-                                            : available
-                                                ? 'border-border hover:bg-muted'
-                                                : 'border-border text-muted-foreground/50 cursor-not-allowed',
-                                    )}
-                                >
-                                    {label}
-                                    {!available && (
-                                        <span className="ml-1 text-[10px] opacity-60">em breve</span>
-                                    )}
-                                </button>
-                            ))}
-                        </div>
+                    <div className="rounded-lg bg-muted/50 border px-3 py-2.5 text-xs text-muted-foreground leading-relaxed">
+                        Acesse <strong>console.twilio.com</strong> → copie o <strong>Account SID</strong> e <strong>Auth Token</strong> da dashboard principal.
+                        O número deve estar no formato <strong>+5511...</strong>
                     </div>
-
-                    {/* Nome */}
                     <div className="flex flex-col gap-1.5">
-                        <Label htmlFor="conn-name">Nome *</Label>
-                        <Input
-                            id="conn-name"
-                            placeholder="Ex: WhatsApp Comercial"
-                            value={name}
-                            onChange={e => setName(e.target.value)}
-                            disabled={isPending}
-                            autoFocus
-                            required
-                        />
+                        <Label htmlFor="voip-name">Nome *</Label>
+                        <Input id="voip-name" placeholder="Ex: Telefone Comercial" value={name} onChange={e => setName(e.target.value)} disabled={isPending} required />
                     </div>
-
-                    {/* Campos específicos do WhatsApp */}
-                    {type === 'WHATSAPP' && (
-                        <>
-                            <div className="flex flex-col gap-1.5">
-                                <Label htmlFor="conn-baseurl">URL do Uazap *</Label>
-                                <Input
-                                    id="conn-baseurl"
-                                    placeholder="https://api.seuuazap.com"
-                                    value={baseUrl}
-                                    onChange={e => setBaseUrl(e.target.value)}
-                                    disabled={isPending}
-                                    required
-                                />
-                                <p className="text-xs text-muted-foreground">
-                                    URL base do seu servidor Uazap (Evolution API)
-                                </p>
-                            </div>
-
-                            <div className="flex flex-col gap-1.5">
-                                <Label htmlFor="conn-admintoken">Admin Token *</Label>
-                                <Input
-                                    id="conn-admintoken"
-                                    type="password"
-                                    placeholder="••••••••••••••••"
-                                    value={adminToken}
-                                    onChange={e => setAdminToken(e.target.value)}
-                                    disabled={isPending}
-                                    required
-                                />
-                                <p className="text-xs text-muted-foreground">
-                                    Token de administrador do seu servidor uazapiGO
-                                </p>
-                            </div>
-                        </>
-                    )}
-
-                    {/* Campos específicos do VoIP (Twilio) */}
-                    {type === 'VOIP' && (
-                        <>
-                            <div className="rounded-lg bg-muted/50 border px-3 py-2.5 text-xs text-muted-foreground leading-relaxed">
-                                Acesse <strong>console.twilio.com</strong> → copie o <strong>Account SID</strong> e <strong>Auth Token</strong> da dashboard principal.
-                                O número deve estar no formato <strong>+5511...</strong>
-                            </div>
-
-                            <div className="flex flex-col gap-1.5">
-                                <Label htmlFor="conn-sid">Account SID *</Label>
-                                <Input
-                                    id="conn-sid"
-                                    placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                                    value={accountSid}
-                                    onChange={e => setAccountSid(e.target.value)}
-                                    disabled={isPending}
-                                    required
-                                />
-                            </div>
-
-                            <div className="flex flex-col gap-1.5">
-                                <Label htmlFor="conn-authtoken">Auth Token *</Label>
-                                <Input
-                                    id="conn-authtoken"
-                                    type="password"
-                                    placeholder="••••••••••••••••••••••••••••••••"
-                                    value={authToken}
-                                    onChange={e => setAuthToken(e.target.value)}
-                                    disabled={isPending}
-                                    required
-                                />
-                            </div>
-
-                            <div className="flex flex-col gap-1.5">
-                                <Label htmlFor="conn-twilio-number">Número Twilio *</Label>
-                                <Input
-                                    id="conn-twilio-number"
-                                    placeholder="+5511999998888"
-                                    value={twilioNumber}
-                                    onChange={e => setTwilioNumber(e.target.value)}
-                                    disabled={isPending}
-                                    required
-                                />
-                                <p className="text-xs text-muted-foreground">
-                                    Número comprado no Twilio, com código do país (+55 para Brasil)
-                                </p>
-                            </div>
-                        </>
-                    )}
-
+                    <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="voip-sid">Account SID *</Label>
+                        <Input id="voip-sid" placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" value={accountSid} onChange={e => setAccountSid(e.target.value)} disabled={isPending} required />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="voip-token">Auth Token *</Label>
+                        <Input id="voip-token" type="password" placeholder="••••••••••••••••••••••••••••••••" value={authToken} onChange={e => setAuthToken(e.target.value)} disabled={isPending} required />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="voip-number">Número Twilio *</Label>
+                        <Input id="voip-number" placeholder="+5511999998888" value={twilioNumber} onChange={e => setTwilioNumber(e.target.value)} disabled={isPending} required />
+                    </div>
                     <DialogFooter className="pt-1">
-                        <Button type="button" variant="outline" onClick={() => { reset(); onClose() }} disabled={isPending}>
-                            Cancelar
-                        </Button>
+                        <Button type="button" variant="outline" onClick={() => { reset(); onClose() }} disabled={isPending}>Cancelar</Button>
                         <Button type="submit" disabled={!canSubmit || isPending}>
-                            {isPending
-                                ? <><Loader2 className="size-4 animate-spin mr-1.5" /> Criando...</>
-                                : 'Criar conexão'
-                            }
+                            {isPending ? <><Loader2 className="size-4 animate-spin mr-1.5" />Criando...</> : 'Criar conexão'}
                         </Button>
                     </DialogFooter>
                 </form>
@@ -376,32 +277,169 @@ function CreateDialog({
     )
 }
 
-// ─── Connection card ──────────────────────────────────────────────────────────
+// ─── WhatsApp purchase card ───────────────────────────────────────────────────
 
-function ConnectionCard({
-    connection,
+function WhatsappPurchaseCard({
+    enterpriseId,
+    onSuccess,
+}: {
+    enterpriseId: string
+    onSuccess: () => void
+}) {
+    const [label, setLabel] = useState('')
+    const [showLabel, setShowLabel] = useState(false)
+    const { mutate: create, isPending } = useCreateWhatsappSubscription()
+
+    function handlePurchase() {
+        create({ enterpriseId, label: label.trim() || 'WhatsApp Principal' }, {
+            onSuccess: (data) => {
+                if (data.paymentUrl) {
+                    window.open(data.paymentUrl, '_blank', 'noopener,noreferrer')
+                    toast.success('Redirecionando para o pagamento. Após confirmar, sua linha será ativada automaticamente.')
+                } else {
+                    toast.info('Assinatura criada! Aguarde a confirmação do pagamento.')
+                }
+                onSuccess()
+            },
+            onError: (err: Error) => toast.error(err.message),
+        })
+    }
+
+    const features = [
+        { icon: MessageSquare, text: 'Envio e recebimento de mensagens' },
+        { icon: Zap, text: 'Automações e chatbots com IA' },
+        { icon: ShieldCheck, text: 'Infraestrutura gerenciada pela plataforma' },
+        { icon: RefreshCw, text: 'Reconexão automática' },
+    ]
+
+    return (
+        <div className="relative overflow-hidden rounded-xl border bg-card">
+            {/* Gradient accent */}
+            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-green-400 via-emerald-500 to-green-600" />
+
+            <div className="p-6 flex flex-col gap-5">
+                {/* Header */}
+                <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                        <div className="flex size-12 items-center justify-center rounded-xl bg-green-500/10 text-green-500">
+                            <WhatsAppIcon className="size-6" />
+                        </div>
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <p className="font-semibold text-base">Linha WhatsApp</p>
+                                <Badge className="gap-1 bg-green-500/10 text-green-600 border-green-500/20 text-[11px] px-1.5">
+                                    <Sparkles className="size-2.5" />
+                                    Recomendado
+                                </Badge>
+                            </div>
+                            <p className="text-sm text-muted-foreground mt-0.5">Canal conversacional completo</p>
+                        </div>
+                    </div>
+
+                    {/* Pricing */}
+                    <div className="text-right shrink-0">
+                        <div className="flex items-baseline gap-0.5 justify-end">
+                            <span className="text-xs text-muted-foreground">R$</span>
+                            <span className="text-3xl font-bold tabular-nums">97</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">/mês por linha</p>
+                    </div>
+                </div>
+
+                {/* Features */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {features.map(({ icon: Icon, text }) => (
+                        <div key={text} className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <div className="flex size-5 shrink-0 items-center justify-center rounded-full bg-green-500/10">
+                                <Icon className="size-3 text-green-600" />
+                            </div>
+                            {text}
+                        </div>
+                    ))}
+                </div>
+
+                <div className="h-px bg-border" />
+
+                {/* Nome opcional */}
+                {showLabel ? (
+                    <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="sub-label" className="text-sm">Nome da linha (opcional)</Label>
+                        <Input
+                            id="sub-label"
+                            placeholder="Ex: WhatsApp Comercial"
+                            value={label}
+                            onChange={e => setLabel(e.target.value)}
+                            className="h-9"
+                        />
+                    </div>
+                ) : (
+                    <button
+                        type="button"
+                        className="text-xs text-muted-foreground hover:text-foreground transition-colors text-left"
+                        onClick={() => setShowLabel(true)}
+                    >
+                        + Personalizar nome da linha
+                    </button>
+                )}
+
+                {/* CTA */}
+                <Button
+                    className="w-full gap-2 bg-green-600 hover:bg-green-700 text-white h-11 text-sm font-medium"
+                    onClick={handlePurchase}
+                    disabled={isPending}
+                >
+                    {isPending ? (
+                        <><Loader2 className="size-4 animate-spin" /> Processando...</>
+                    ) : (
+                        <>
+                            <CreditCard className="size-4" />
+                            Assinar agora — R$ 97/mês
+                            <ArrowRight className="size-4 ml-auto" />
+                        </>
+                    )}
+                </Button>
+
+                <p className="text-[11px] text-muted-foreground text-center leading-relaxed">
+                    Cobrança recorrente via Pix, boleto ou cartão · Cancele quando quiser
+                </p>
+            </div>
+        </div>
+    )
+}
+
+// ─── Subscription card ────────────────────────────────────────────────────────
+
+function SubscriptionCard({
+    sub,
     enterpriseId,
     onDelete,
 }: {
-    connection: Connection
+    sub: WhatsappSubscription
     enterpriseId: string
-    onDelete: (c: Connection) => void
+    onDelete: (s: WhatsappSubscription) => void
 }) {
     const [showQr, setShowQr] = useState(false)
 
     const { mutate: disconnect, isPending: disconnecting } = useDisconnect()
     const { mutate: configWebhook, isPending: configuringWebhook } = useConfigureWebhook()
 
+    const conn = sub.connection
+    const isActive = sub.status === 'ACTIVE'
+    const isPending = sub.status === 'PENDING_PAYMENT'
+    const isConnected = conn?.status === 'CONNECTED'
+
     function handleDisconnect() {
-        disconnect({ id: connection.id, enterpriseId }, {
-            onSuccess: () => toast.success(`${connection.name} desconectado.`),
+        if (!conn) return
+        disconnect({ id: conn.id, enterpriseId }, {
+            onSuccess: () => toast.success('WhatsApp desconectado.'),
             onError: (err: Error) => toast.error(err.message),
         })
     }
 
-    function handleConfigureWebhook() {
-        configWebhook({ id: connection.id, enterpriseId }, {
-            onSuccess: () => toast.success('Webhook configurado com sucesso!'),
+    function handleWebhook() {
+        if (!conn) return
+        configWebhook({ id: conn.id, enterpriseId }, {
+            onSuccess: () => toast.success('Webhook configurado!'),
             onError: (err: unknown) => {
                 const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
                 toast.error(msg ?? 'Erro ao configurar webhook.')
@@ -409,54 +447,72 @@ function ConnectionCard({
         })
     }
 
-    const isWhatsApp = connection.type === 'WHATSAPP'
-    const isVoip = connection.type === 'VOIP'
-    const isConnected = connection.status === 'CONNECTED'
-
     return (
         <>
-            <div className="flex items-center gap-4 rounded-lg border bg-card p-4 hover:bg-muted/20 transition-colors">
+            <div className={cn(
+                'flex items-center gap-4 rounded-lg border bg-card p-4 transition-colors',
+                isPending ? 'border-amber-200 bg-amber-50/40 dark:bg-amber-500/5 dark:border-amber-500/20' : 'hover:bg-muted/20',
+            )}>
                 {/* Ícone */}
                 <div className={cn(
                     'flex size-10 shrink-0 items-center justify-center rounded-lg',
-                    isWhatsApp ? 'bg-green-500/10 text-green-500'
-                    : isVoip ? 'bg-blue-500/10 text-blue-500'
-                    : 'bg-muted text-muted-foreground',
+                    isActive ? 'bg-green-500/10 text-green-500' : 'bg-muted text-muted-foreground',
                 )}>
-                    {isWhatsApp ? <WhatsAppIcon className="size-5" />
-                    : isVoip ? <Phone className="size-5" />
-                    : <Globe className="size-5" />}
+                    <WhatsAppIcon className="size-5" />
                 </div>
 
                 {/* Info */}
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-sm font-medium truncate">{connection.name}</p>
-                        <StatusBadge status={connection.status} />
+                        <p className="text-sm font-medium truncate">{sub.label}</p>
+                        <SubStatusBadge status={sub.status} />
+                        {conn && <StatusBadge status={conn.status as Connection['status']} />}
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                        {connection.type}
-                        {connection.phoneNumber && ` · ${connection.phoneNumber}`}
+                        R$ {sub.priceMonthly.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}/mês
+                        {conn?.phoneNumber && ` · ${conn.phoneNumber}`}
                     </p>
                 </div>
 
                 {/* Ações */}
                 <div className="flex items-center gap-1.5 shrink-0">
-                    {isWhatsApp && !isConnected && (
+                    {/* Pendente: botão de pagar */}
+                    {isPending && sub.paymentUrl && (
+                        <Button
+                            size="sm"
+                            className="h-7 text-xs gap-1.5 bg-amber-500 hover:bg-amber-600 text-white"
+                            onClick={() => window.open(sub.paymentUrl!, '_blank', 'noopener,noreferrer')}
+                        >
+                            <ExternalLink className="size-3.5" />
+                            Pagar agora
+                        </Button>
+                    )}
+
+                    {/* Ativa + sem conexão ainda: aguardando provisionamento */}
+                    {isActive && !conn && (
+                        <Badge variant="secondary" className="text-xs gap-1">
+                            <Loader2 className="size-3 animate-spin" />
+                            Provisionando...
+                        </Badge>
+                    )}
+
+                    {/* Ativa + conexão disponível + não conectado: QR code */}
+                    {isActive && conn && !isConnected && (
                         <Button size="sm" variant="outline" onClick={() => setShowQr(true)} className="h-7 text-xs gap-1.5">
                             <QrCode className="size-3.5" />
                             Conectar
                         </Button>
                     )}
 
-                    {isWhatsApp && (
+                    {/* Webhook */}
+                    {isActive && conn && (
                         <Button
                             size="sm"
                             variant="outline"
-                            onClick={handleConfigureWebhook}
+                            onClick={handleWebhook}
                             disabled={configuringWebhook}
                             className="h-7 text-xs gap-1.5"
-                            title="Registrar/atualizar webhook na uazapiGO"
+                            title="Registrar/atualizar webhook"
                         >
                             {configuringWebhook
                                 ? <Loader2 className="size-3.5 animate-spin" />
@@ -466,6 +522,7 @@ function ConnectionCard({
                         </Button>
                     )}
 
+                    {/* Desconectar */}
                     {isConnected && (
                         <Button
                             size="sm"
@@ -486,16 +543,16 @@ function ConnectionCard({
                         size="icon"
                         variant="ghost"
                         className="size-7 text-muted-foreground hover:text-destructive"
-                        onClick={() => onDelete(connection)}
+                        onClick={() => onDelete(sub)}
                     >
                         <Trash2 className="size-3.5" />
                     </Button>
                 </div>
             </div>
 
-            {showQr && (
+            {showQr && conn && (
                 <QrDialog
-                    connection={connection}
+                    connection={conn as Connection}
                     enterpriseId={enterpriseId}
                     open={showQr}
                     onClose={() => setShowQr(false)}
@@ -505,25 +562,100 @@ function ConnectionCard({
     )
 }
 
+// ─── VoIP connection card ─────────────────────────────────────────────────────
+
+function VoipCard({
+    connection,
+    enterpriseId,
+    onDelete,
+}: {
+    connection: Connection
+    enterpriseId: string
+    onDelete: (c: Connection) => void
+}) {
+    const { mutate: disconnect, isPending: disconnecting } = useDisconnect()
+    const isConnected = connection.status === 'CONNECTED'
+
+    function handleDisconnect() {
+        disconnect({ id: connection.id, enterpriseId }, {
+            onSuccess: () => toast.success(`${connection.name} desconectado.`),
+            onError: (err: Error) => toast.error(err.message),
+        })
+    }
+
+    return (
+        <div className="flex items-center gap-4 rounded-lg border bg-card p-4 hover:bg-muted/20 transition-colors">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-blue-500/10 text-blue-500">
+                <Phone className="size-5" />
+            </div>
+            <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-sm font-medium truncate">{connection.name}</p>
+                    <StatusBadge status={connection.status} />
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                    VoIP · Twilio
+                    {connection.phoneNumber && ` · ${connection.phoneNumber}`}
+                </p>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+                {isConnected && (
+                    <Button size="sm" variant="outline" onClick={handleDisconnect} disabled={disconnecting} className="h-7 text-xs gap-1.5">
+                        {disconnecting ? <Loader2 className="size-3.5 animate-spin" /> : <WifiOff className="size-3.5" />}
+                        Desconectar
+                    </Button>
+                )}
+                <Button size="icon" variant="ghost" className="size-7 text-muted-foreground hover:text-destructive" onClick={() => onDelete(connection)}>
+                    <Trash2 className="size-3.5" />
+                </Button>
+            </div>
+        </div>
+    )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ConnectionsPage() {
     const { enterprise } = useEnterprise()
     const enterpriseId = enterprise?.id ?? ''
 
-    const [showCreate, setShowCreate] = useState(false)
-    const [deleteTarget, setDeleteTarget] = useState<Connection | null>(null)
+    const [showVoipCreate, setShowVoipCreate] = useState(false)
+    const [deleteSubTarget, setDeleteSubTarget] = useState<WhatsappSubscription | null>(null)
+    const [deleteConnTarget, setDeleteConnTarget] = useState<Connection | null>(null)
 
-    const { data: connections = [], isLoading } = useConnections(enterpriseId)
-    const { mutate: remove, isPending: deleting } = useDeleteConnection()
+    const { data: connections = [], isLoading: loadingConn } = useConnections(enterpriseId)
+    const { data: waSubs = [], isLoading: loadingSubs } = useWhatsappSubscriptions(enterpriseId)
+    const { mutate: removeConn, isPending: deletingConn } = useDeleteConnection()
+    const { mutate: cancelSub, isPending: cancelingSub } = useCancelWhatsappSubscription()
 
-    function confirmDelete() {
-        if (!deleteTarget) return
-        remove({ id: deleteTarget.id, enterpriseId }, {
-            onSuccess: () => { toast.success('Conexão removida.'); setDeleteTarget(null) },
+    const isLoading = loadingConn || loadingSubs
+
+    // VoIP connections (não gerenciadas por assinatura)
+    const voipConnections = connections.filter(c => c.type === 'VOIP')
+
+    // Assinaturas ativas ou pendentes (não canceladas)
+    const activeSubs = waSubs.filter(s => s.status !== 'CANCELLED')
+
+    // Contagem para uso
+    const totalConnections = voipConnections.length + activeSubs.filter(s => s.status === 'ACTIVE').length
+
+    function confirmDeleteSub() {
+        if (!deleteSubTarget) return
+        cancelSub({ id: deleteSubTarget.id, enterpriseId }, {
+            onSuccess: () => { toast.success('Assinatura cancelada.'); setDeleteSubTarget(null) },
             onError: (err: Error) => toast.error(err.message),
         })
     }
+
+    function confirmDeleteConn() {
+        if (!deleteConnTarget) return
+        removeConn({ id: deleteConnTarget.id, enterpriseId }, {
+            onSuccess: () => { toast.success('Conexão removida.'); setDeleteConnTarget(null) },
+            onError: (err: Error) => toast.error(err.message),
+        })
+    }
+
+    const hasAnything = activeSubs.length > 0 || voipConnections.length > 0
 
     return (
         <div className="flex flex-col h-full">
@@ -536,26 +668,22 @@ export default function ConnectionsPage() {
                         Gerencie seus canais de atendimento e integrações
                     </p>
                 </div>
-                <Button onClick={() => setShowCreate(true)} className="gap-1.5">
-                    <Plus className="size-4" />
-                    Nova conexão
+                <Button variant="outline" onClick={() => setShowVoipCreate(true)} className="gap-1.5">
+                    <Phone className="size-4" />
+                    Adicionar VoIP
                 </Button>
             </div>
 
             {/* ── Contador ───────────────────────────────────────────────── */}
-            {!isLoading && connections.length > 0 && (
+            {!isLoading && hasAnything && (
                 <div className="flex items-center gap-4 px-6 py-3 border-b shrink-0">
                     <span className="text-sm text-muted-foreground">
-                        {connections.length} de {enterprise?.maxConnections ?? '—'} conexões usadas
+                        {totalConnections} de {enterprise?.maxConnections ?? '—'} conexões ativas
                     </span>
                     <div className="flex items-center gap-3">
                         <span className="flex items-center gap-1.5 text-xs text-green-600">
                             <Wifi className="size-3.5" />
-                            {connections.filter(c => c.status === 'CONNECTED').length} ativas
-                        </span>
-                        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <WifiOff className="size-3.5" />
-                            {connections.filter(c => c.status !== 'CONNECTED').length} inativas
+                            {activeSubs.filter(s => s.connection?.status === 'CONNECTED').length + voipConnections.filter(c => c.status === 'CONNECTED').length} online
                         </span>
                     </div>
                 </div>
@@ -567,66 +695,142 @@ export default function ConnectionsPage() {
                     <div className="flex items-center justify-center h-40">
                         <Loader2 className="size-5 animate-spin text-muted-foreground" />
                     </div>
-                ) : connections.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-52 gap-4 text-center">
-                        <div className="flex size-14 items-center justify-center rounded-full bg-muted">
-                            <Globe className="size-6 text-muted-foreground" />
-                        </div>
-                        <div>
-                            <p className="text-sm font-medium">Nenhuma conexão ainda</p>
-                            <p className="text-sm text-muted-foreground mt-1">
-                                Conecte seu WhatsApp para começar a receber e enviar mensagens
+                ) : !hasAnything ? (
+                    // Estado vazio: mostra card de compra em destaque
+                    <div className="flex flex-col items-center gap-8 max-w-lg mx-auto pt-6">
+                        <div className="text-center">
+                            <div className="flex size-16 items-center justify-center rounded-full bg-green-500/10 text-green-500 mx-auto mb-4">
+                                <WhatsAppIcon className="size-8" />
+                            </div>
+                            <h2 className="text-lg font-semibold">Conecte seu WhatsApp</h2>
+                            <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">
+                                Ative uma linha WhatsApp e comece a atender seus clientes diretamente pela plataforma,
+                                com IA, automações e CRM integrados.
                             </p>
                         </div>
-                        <Button onClick={() => setShowCreate(true)} className="gap-1.5">
-                            <Plus className="size-4" />
-                            Nova conexão
-                        </Button>
+                        <div className="w-full">
+                            <WhatsappPurchaseCard enterpriseId={enterpriseId} onSuccess={() => { }} />
+                        </div>
                     </div>
                 ) : (
-                    <div className="grid gap-3 max-w-2xl">
-                        {connections.map(c => (
-                            <ConnectionCard
-                                key={c.id}
-                                connection={c}
-                                enterpriseId={enterpriseId}
-                                onDelete={setDeleteTarget}
-                            />
-                        ))}
+                    <div className="flex flex-col gap-6 max-w-2xl">
+
+                        {/* ── WhatsApp ── */}
+                        <div>
+                            <div className="flex items-center justify-between mb-3">
+                                <div className="flex items-center gap-2">
+                                    <WhatsAppIcon className="size-4 text-green-500" />
+                                    <h2 className="text-sm font-semibold">WhatsApp</h2>
+                                    <Badge variant="secondary" className="text-xs">{activeSubs.length}</Badge>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col gap-3">
+                                {activeSubs.map(sub => (
+                                    <SubscriptionCard
+                                        key={sub.id}
+                                        sub={sub}
+                                        enterpriseId={enterpriseId}
+                                        onDelete={setDeleteSubTarget}
+                                    />
+                                ))}
+
+                                {/* Card de compra de nova linha */}
+                                {(enterprise?.maxConnections ?? 0) > totalConnections && (
+                                    <WhatsappPurchaseCard enterpriseId={enterpriseId} onSuccess={() => { }} />
+                                )}
+                            </div>
+                        </div>
+
+                        {/* ── VoIP ── */}
+                        {voipConnections.length > 0 && (
+                            <div>
+                                <div className="flex items-center gap-2 mb-3">
+                                    <Phone className="size-4 text-blue-500" />
+                                    <h2 className="text-sm font-semibold">VoIP / Telefone</h2>
+                                    <Badge variant="secondary" className="text-xs">{voipConnections.length}</Badge>
+                                </div>
+                                <div className="flex flex-col gap-3">
+                                    {voipConnections.map(c => (
+                                        <VoipCard
+                                            key={c.id}
+                                            connection={c}
+                                            enterpriseId={enterpriseId}
+                                            onDelete={setDeleteConnTarget}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Em breve */}
+                        <div>
+                            <div className="flex items-center gap-2 mb-3">
+                                <Globe className="size-4 text-muted-foreground" />
+                                <h2 className="text-sm font-semibold text-muted-foreground">Em breve</h2>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                {['Instagram', 'Telegram', 'Webhook', 'API'].map(label => (
+                                    <div key={label} className="flex items-center gap-1.5 rounded-lg border border-dashed px-3 py-2 text-xs text-muted-foreground/60">
+                                        {label}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
                     </div>
                 )}
             </div>
 
             {/* ── Dialogs ────────────────────────────────────────────────── */}
             {enterprise && (
-                <CreateDialog
+                <VoipDialog
                     enterpriseId={enterpriseId}
-                    open={showCreate}
-                    onClose={() => setShowCreate(false)}
+                    open={showVoipCreate}
+                    onClose={() => setShowVoipCreate(false)}
                 />
             )}
 
-            <AlertDialog open={!!deleteTarget} onOpenChange={v => { if (!v) setDeleteTarget(null) }}>
+            {/* Cancelar assinatura WhatsApp */}
+            <AlertDialog open={!!deleteSubTarget} onOpenChange={v => { if (!v) setDeleteSubTarget(null) }}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Cancelar assinatura?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Tem certeza que deseja cancelar a assinatura <strong>{deleteSubTarget?.label}</strong>?
+                            A cobrança será encerrada e a linha será desativada. Esta ação não pode ser desfeita.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Voltar</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={confirmDeleteSub}
+                            disabled={cancelingSub}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                            {cancelingSub ? <><Loader2 className="size-4 animate-spin" /> Cancelando...</> : 'Cancelar assinatura'}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Remover conexão VoIP */}
+            <AlertDialog open={!!deleteConnTarget} onOpenChange={v => { if (!v) setDeleteConnTarget(null) }}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>Remover conexão?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            Tem certeza que deseja remover <strong>{deleteTarget?.name}</strong>?
-                            {deleteTarget?.type === 'WHATSAPP' && ' A instância também será deletada do Uazap.'}
-                            {' '}Esta ação não pode ser desfeita.
+                            Tem certeza que deseja remover <strong>{deleteConnTarget?.name}</strong>?
+                            Esta ação não pode ser desfeita.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancelar</AlertDialogCancel>
                         <AlertDialogAction
-                            onClick={confirmDelete}
-                            disabled={deleting}
+                            onClick={confirmDeleteConn}
+                            disabled={deletingConn}
                             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                         >
-                            {deleting
-                                ? <><Loader2 className="size-4 animate-spin" /> Removendo...</>
-                                : 'Remover'
-                            }
+                            {deletingConn ? <><Loader2 className="size-4 animate-spin" /> Removendo...</> : 'Remover'}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

@@ -118,4 +118,8 @@ export const keys = {
         flow: (stageId: string) => ['cadence', 'flow', stageId] as const,
         execution: (dealId: string) => ['cadence', 'execution', dealId] as const,
     },
+
+    subscriptions: {
+        whatsapp: (enterpriseId: string) => ['enterprises', enterpriseId, 'subscriptions', 'whatsapp'] as const,
+    },
 }

@@ -301,7 +301,14 @@ function WhatsappPurchaseCard({
                 }
                 onSuccess()
             },
-            onError: (err: Error) => toast.error(err.message),
+            onError: (err: unknown) => {
+                const apiErr = (err as { response?: { data?: { error?: string; code?: string } } })?.response?.data
+                if (apiErr?.code === 'MISSING_DOCUMENT') {
+                    toast.error('CPF/CNPJ da empresa não preenchido. Acesse Configurações → Empresa para preencher antes de assinar.', { duration: 8000 })
+                } else {
+                    toast.error(apiErr?.error ?? (err as Error).message ?? 'Erro ao criar assinatura.')
+                }
+            },
         })
     }
 

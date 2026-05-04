@@ -67,6 +67,7 @@ import { useConnections } from '@/services/connections'
 import { useMessages, useSendMessage, useChatSocket } from '@/services/chat'
 import { keys } from '@/lib/keys'
 import { CadenceConfigSheet } from '@/components/cadence-config-sheet'
+import { PipelineMetaIntegrationSheet } from '@/components/pipeline-meta-integration-sheet'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -2212,6 +2213,9 @@ export default function PipelinePage() {
     const [editColor, setEditColor] = useState('#6366f1')
     const [editDesc, setEditDesc] = useState('')
 
+    // Meta integration sheet state
+    const [integrationOpen, setIntegrationOpen] = useState(false)
+
     // Webhook dialog state
     const [webhookOpen, setWebhookOpen] = useState(false)
     const [webhookCopied, setWebhookCopied] = useState(false)
@@ -2527,9 +2531,12 @@ export default function PipelinePage() {
                                 <MoreHorizontal className="size-3.5 text-muted-foreground" />
                             </button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-44">
+                        <DropdownMenuContent align="end" className="w-48">
                             <DropdownMenuItem onClick={handleOpenEdit}>
                                 <Pencil className="size-3.5 mr-2" /> Editar pipeline
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setIntegrationOpen(true)}>
+                                <Zap className="size-3.5 mr-2" /> Integração Meta
                             </DropdownMenuItem>
                             {pipeline.isBilateral && (
                                 <DropdownMenuItem onClick={() => setWebhookOpen(true)}>
@@ -2663,6 +2670,15 @@ export default function PipelinePage() {
                 filters={filters}
                 onApply={setFilters}
                 enterpriseId={enterpriseId}
+            />
+
+            {/* Meta Integration Sheet */}
+            <PipelineMetaIntegrationSheet
+                open={integrationOpen}
+                onOpenChange={setIntegrationOpen}
+                enterpriseId={enterpriseId}
+                pipelineId={id}
+                stages={pipeline.stages}
             />
 
             {/* Edit Pipeline Dialog */}

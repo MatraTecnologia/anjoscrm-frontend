@@ -6,7 +6,7 @@ import { keys } from '@/lib/keys'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type ConnectionType = 'WHATSAPP' | 'INSTAGRAM' | 'TELEGRAM' | 'WEBHOOK' | 'API' | 'VOIP'
+export type ConnectionType = 'WHATSAPP' | 'INSTAGRAM' | 'TELEGRAM' | 'WEBHOOK' | 'API' | 'VOIP' | 'META'
 export type ConnectionStatus = 'CONNECTED' | 'DISCONNECTED' | 'ERROR'
 
 export type Connection = {

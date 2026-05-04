@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
     Plus, Globe, Trash2, WifiOff, QrCode, RefreshCw, Loader2,
@@ -31,7 +32,22 @@ import {
     useWhatsappSubscriptions, useCreateWhatsappSubscription, useCancelWhatsappSubscription,
     type WhatsappSubscription,
 } from '@/services/subscriptions'
+import {
+    useGetMetaAuthUrl, useVerifyMetaToken, useCreateMetaConnection, useGetMetaForms,
+    type MetaTokenVerification, type MetaPage,
+} from '@/services/meta'
+import { keys } from '@/lib/keys'
 import { cn } from '@/lib/utils'
+
+// ─── Meta icon ────────────────────────────────────────────────────────────────
+
+function MetaIcon({ className }: { className?: string }) {
+    return (
+        <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden>
+            <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+        </svg>
+    )
+}
 
 // ─── WhatsApp icon ────────────────────────────────────────────────────────────
 
@@ -620,6 +636,508 @@ function VoipCard({
     )
 }
 
+// ─── Meta dialog ─────────────────────────────────────────────────────────────
+
+type MetaMethod = 'oauth' | 'token'
+
+function MetaDialog({
+    enterpriseId,
+    open,
+    onClose,
+}: {
+    enterpriseId: string
+    open: boolean
+    onClose: () => void
+}) {
+    const [method, setMethod] = useState<MetaMethod>('token')
+    const [name, setName] = useState('')
+    const [token, setToken] = useState('')
+    const [verified, setVerified] = useState<MetaTokenVerification | null>(null)
+
+    const queryClient = useQueryClient()
+    const { mutate: getAuthUrl, isPending: fetchingUrl } = useGetMetaAuthUrl()
+    const { mutate: verifyToken, isPending: verifying } = useVerifyMetaToken()
+    const { mutate: createConnection, isPending: saving } = useCreateMetaConnection()
+
+    function reset() {
+        setName(''); setToken(''); setVerified(null); setMethod('token')
+    }
+
+    const handleOAuthMessage = useCallback((event: MessageEvent) => {
+        if (event.origin !== window.location.origin) return
+        if (event.data?.type === 'META_OAUTH_SUCCESS') {
+            window.removeEventListener('message', handleOAuthMessage)
+            queryClient.invalidateQueries({ queryKey: keys.connections.all(enterpriseId) })
+            toast.success('Conta Meta conectada!')
+            reset()
+            onClose()
+        } else if (event.data?.type === 'META_OAUTH_ERROR') {
+            window.removeEventListener('message', handleOAuthMessage)
+            toast.error(event.data.message ?? 'Erro ao conectar conta Meta.')
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [enterpriseId, queryClient])
+
+    function handleOAuth() {
+        getAuthUrl(enterpriseId, {
+            onSuccess: ({ url }) => {
+                const popup = window.open(url, 'meta-oauth', 'width=600,height=700,scrollbars=yes,resizable=yes')
+                if (!popup) {
+                    toast.error('Popup bloqueado pelo navegador. Permita popups para este site e tente novamente.')
+                    return
+                }
+                window.addEventListener('message', handleOAuthMessage)
+            },
+            onError: (err: unknown) => {
+                const status = (err as { response?: { status?: number } })?.response?.status
+                if (status === 503) {
+                    toast.info('OAuth não configurado neste servidor. Use o token manual por enquanto.')
+                } else {
+                    toast.error('Não foi possível iniciar a autenticação com o Facebook.')
+                }
+            },
+        })
+    }
+
+    function handleVerify() {
+        verifyToken({ enterpriseId, accessToken: token.trim() }, {
+            onSuccess: (result) => setVerified(result),
+            onError: () => toast.error('Token inválido ou sem as permissões necessárias.'),
+        })
+    }
+
+    function handleSave() {
+        if (!verified?.valid) return
+        createConnection({
+            enterpriseId,
+            name: name.trim() || verified.accountName,
+            accessToken: token.trim(),
+            accountId: verified.accountId,
+            accountName: verified.accountName,
+        }, {
+            onSuccess: () => { toast.success('Conta Meta conectada!'); reset(); onClose() },
+            onError: () => toast.error('Erro ao salvar a conexão.'),
+        })
+    }
+
+    const oauthPerms = [
+        'Acessar suas páginas do Facebook',
+        'Listar formulários de Lead Ads',
+        'Receber novos leads em tempo real',
+    ]
+
+    const requiredPerms = ['leads_retrieval', 'pages_manage_ads']
+
+    return (
+        <Dialog open={open} onOpenChange={v => { if (!v) { reset(); onClose() } }}>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                        <MetaIcon className="size-4 text-blue-600" />
+                        Conectar conta Meta
+                    </DialogTitle>
+                </DialogHeader>
+
+                {/* Seletor de método */}
+                <div className="flex gap-1 rounded-lg bg-muted p-1">
+                    {(['oauth', 'token'] as MetaMethod[]).map(m => (
+                        <button
+                            key={m}
+                            type="button"
+                            onClick={() => { setMethod(m); setVerified(null) }}
+                            className={cn(
+                                'flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                                method === m
+                                    ? 'bg-background text-foreground shadow-sm'
+                                    : 'text-muted-foreground hover:text-foreground',
+                            )}
+                        >
+                            {m === 'oauth' ? 'Autorizar com Facebook' : 'Token manual'}
+                        </button>
+                    ))}
+                </div>
+
+                {method === 'oauth' ? (
+                    <div className="flex flex-col gap-4 py-1">
+                        <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground space-y-1.5">
+                            <p className="font-medium text-foreground text-sm">O que será autorizado:</p>
+                            {oauthPerms.map(p => (
+                                <div key={p} className="flex items-center gap-2">
+                                    <Check className="size-3 text-green-500 shrink-0" />
+                                    <span>{p}</span>
+                                </div>
+                            ))}
+                        </div>
+                        <p className="text-xs text-muted-foreground text-center">
+                            Você será redirecionado para o Facebook. O acesso pode ser revogado a qualquer momento.
+                        </p>
+                        <Button
+                            className="w-full gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+                            onClick={handleOAuth}
+                            disabled={fetchingUrl}
+                        >
+                            {fetchingUrl ? (
+                                <><Loader2 className="size-4 animate-spin" /> Redirecionando...</>
+                            ) : (
+                                <><MetaIcon className="size-4" /> Continuar com Facebook <ArrowRight className="size-4 ml-auto" /></>
+                            )}
+                        </Button>
+                    </div>
+                ) : (
+                    <div className="flex flex-col gap-3 py-1">
+                        <div className="rounded-lg bg-muted/50 border px-3 py-2.5 text-xs text-muted-foreground leading-relaxed">
+                            Gere um <strong>Page Access Token</strong> permanente no{' '}
+                            <strong>Meta Business Suite</strong> ou <strong>Graph API Explorer</strong>{' '}
+                            com as permissões{' '}
+                            <code className="bg-muted px-1 rounded">leads_retrieval</code> e{' '}
+                            <code className="bg-muted px-1 rounded">pages_manage_ads</code>.
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                            <Label htmlFor="meta-name">Nome da conta (opcional)</Label>
+                            <Input
+                                id="meta-name"
+                                placeholder="Ex: Agência Principal"
+                                value={name}
+                                onChange={e => { setName(e.target.value) }}
+                                disabled={saving}
+                            />
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                            <Label htmlFor="meta-token">Access Token *</Label>
+                            <Input
+                                id="meta-token"
+                                type="password"
+                                placeholder="EAAxxxxxxxxxxxxxxxx..."
+                                value={token}
+                                onChange={e => { setToken(e.target.value); setVerified(null) }}
+                                disabled={saving}
+                            />
+                        </div>
+
+                        {/* Resultado da verificação */}
+                        {verified && (
+                            <div className={cn(
+                                'rounded-lg border p-3 text-xs space-y-1.5',
+                                verified.valid && verified.hasLeadsAccess
+                                    ? 'border-green-200 bg-green-50/50 dark:bg-green-500/5 dark:border-green-500/20'
+                                    : 'border-amber-200 bg-amber-50/50 dark:bg-amber-500/5 dark:border-amber-500/20',
+                            )}>
+                                <div className="flex items-center gap-1.5 font-medium text-sm">
+                                    {verified.valid ? (
+                                        <>
+                                            <Check className="size-3.5 text-green-600" />
+                                            <span className={verified.hasLeadsAccess ? 'text-green-700' : 'text-amber-700'}>
+                                                {verified.hasLeadsAccess
+                                                    ? 'Token válido com acesso a leads'
+                                                    : 'Token válido — sem permissão para leads'}
+                                            </span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <AlertCircle className="size-3.5 text-destructive" />
+                                            <span className="text-destructive">Token inválido</span>
+                                        </>
+                                    )}
+                                </div>
+                                {verified.accountName && (
+                                    <p className="text-muted-foreground">
+                                        Conta: <strong>{verified.accountName}</strong>
+                                    </p>
+                                )}
+                                <div className="flex gap-1 flex-wrap">
+                                    {requiredPerms.map(perm => {
+                                        const granted = verified.permissions.includes(perm)
+                                        return (
+                                            <Badge
+                                                key={perm}
+                                                className={cn(
+                                                    'text-[10px] px-1.5 border',
+                                                    granted
+                                                        ? 'bg-green-500/10 text-green-700 border-green-500/20 hover:bg-green-500/10'
+                                                        : 'bg-red-500/10 text-red-700 border-red-500/20 hover:bg-red-500/10',
+                                                )}
+                                            >
+                                                {granted ? '✓' : '✗'} {perm}
+                                            </Badge>
+                                        )
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="flex gap-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={handleVerify}
+                                disabled={!token.trim() || verifying || saving}
+                                className="flex-1"
+                            >
+                                {verifying
+                                    ? <Loader2 className="size-4 animate-spin mr-1.5" />
+                                    : <ShieldCheck className="size-4 mr-1.5" />
+                                }
+                                Verificar token
+                            </Button>
+                            <Button
+                                type="button"
+                                onClick={handleSave}
+                                disabled={!verified?.valid || saving}
+                                className="flex-1"
+                            >
+                                {saving && <Loader2 className="size-4 animate-spin mr-1.5" />}
+                                Salvar
+                            </Button>
+                        </div>
+                    </div>
+                )}
+            </DialogContent>
+        </Dialog>
+    )
+}
+
+// ─── Meta forms dialog ────────────────────────────────────────────────────────
+
+function MetaFormsDialog({
+    enterpriseId,
+    connectionId,
+    connectionName,
+    open,
+    onClose,
+}: {
+    enterpriseId: string
+    connectionId: string
+    connectionName: string
+    open: boolean
+    onClose: () => void
+}) {
+    const [selectedPage, setSelectedPage] = useState<MetaPage | null>(null)
+
+    const { data, isLoading, isError, refetch } = useGetMetaForms(enterpriseId, connectionId, open)
+    const pages: MetaPage[] = data?.pages ?? []
+
+    function handleClose() {
+        setSelectedPage(null)
+        onClose()
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={v => { if (!v) handleClose() }}>
+            <DialogContent className="sm:max-w-lg">
+                <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                        <MetaIcon className="size-4 text-blue-600" />
+                        {selectedPage ? selectedPage.pageName : 'Selecionar página'}
+                    </DialogTitle>
+                </DialogHeader>
+
+                {/* Breadcrumb */}
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground -mt-1">
+                    <button
+                        type="button"
+                        onClick={() => setSelectedPage(null)}
+                        className={cn(
+                            'transition-colors',
+                            selectedPage ? 'hover:text-foreground cursor-pointer' : 'text-foreground font-medium cursor-default',
+                        )}
+                    >
+                        {connectionName}
+                    </button>
+                    {selectedPage && (
+                        <>
+                            <span>/</span>
+                            <span className="text-foreground font-medium truncate max-w-[200px]">{selectedPage.pageName}</span>
+                        </>
+                    )}
+                </div>
+
+                <div className="flex flex-col gap-2 max-h-[420px] overflow-y-auto pr-1">
+
+                    {/* Loading */}
+                    {isLoading && (
+                        <div className="flex items-center justify-center py-10 gap-2 text-muted-foreground">
+                            <Loader2 className="size-4 animate-spin" />
+                            <span className="text-sm">Carregando páginas...</span>
+                        </div>
+                    )}
+
+                    {/* Erro */}
+                    {isError && (
+                        <div className="flex flex-col items-center gap-3 py-8 text-center">
+                            <AlertCircle className="size-8 text-destructive/60" />
+                            <p className="text-sm text-muted-foreground">
+                                Não foi possível carregar as páginas. Verifique se o token ainda é válido.
+                            </p>
+                            <Button size="sm" variant="outline" onClick={() => refetch()}>
+                                <RefreshCw className="size-3.5 mr-1.5" />
+                                Tentar novamente
+                            </Button>
+                        </div>
+                    )}
+
+                    {/* ── Etapa 1: lista de páginas ── */}
+                    {!isLoading && !isError && !selectedPage && (
+                        <>
+                            {pages.length === 0 ? (
+                                <div className="flex flex-col items-center gap-3 py-8 text-center">
+                                    <MessageSquare className="size-8 text-muted-foreground/40" />
+                                    <p className="text-sm text-muted-foreground">
+                                        Nenhuma página do Facebook encontrada nesta conta.
+                                    </p>
+                                    <p className="text-xs text-muted-foreground/70">
+                                        Certifique-se de que o token possui a permissão{' '}
+                                        <code className="bg-muted px-1 rounded">pages_read_engagement</code>.
+                                    </p>
+                                </div>
+                            ) : (
+                                pages.map(page => (
+                                    <button
+                                        key={page.pageId}
+                                        type="button"
+                                        onClick={() => setSelectedPage(page)}
+                                        className="flex items-center gap-3 rounded-lg border bg-card px-4 py-3 text-left hover:bg-muted/40 transition-colors"
+                                    >
+                                        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-blue-600/10 text-blue-600">
+                                            <MetaIcon className="size-4" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-medium truncate">{page.pageName}</p>
+                                            <p className="text-xs text-muted-foreground mt-0.5">
+                                                {page.forms.length === 0
+                                                    ? 'Nenhum formulário'
+                                                    : `${page.forms.length} formulário${page.forms.length !== 1 ? 's' : ''} de Lead Ads`}
+                                            </p>
+                                        </div>
+                                        <ArrowRight className="size-4 text-muted-foreground shrink-0" />
+                                    </button>
+                                ))
+                            )}
+                        </>
+                    )}
+
+                    {/* ── Etapa 2: formulários da página selecionada ── */}
+                    {!isLoading && !isError && selectedPage && (
+                        <>
+                            {selectedPage.forms.length === 0 ? (
+                                <div className="flex flex-col items-center gap-3 py-8 text-center">
+                                    <MessageSquare className="size-8 text-muted-foreground/40" />
+                                    <p className="text-sm text-muted-foreground">
+                                        Nenhum formulário de Lead Ads nesta página.
+                                    </p>
+                                    <p className="text-xs text-muted-foreground/70">
+                                        Crie um formulário no Gerenciador de Anúncios do Facebook e ele aparecerá aqui.
+                                    </p>
+                                </div>
+                            ) : (
+                                selectedPage.forms.map(form => (
+                                    <div
+                                        key={form.id}
+                                        className="flex items-center justify-between rounded-lg border bg-muted/30 px-3 py-3"
+                                    >
+                                        <div className="flex flex-col min-w-0">
+                                            <p className="text-sm font-medium truncate">{form.name}</p>
+                                            <p className="text-[11px] text-muted-foreground mt-0.5">
+                                                {form.leadsCount > 0
+                                                    ? `${form.leadsCount.toLocaleString('pt-BR')} lead${form.leadsCount !== 1 ? 's' : ''} captado${form.leadsCount !== 1 ? 's' : ''}`
+                                                    : 'Nenhum lead captado ainda'}
+                                            </p>
+                                        </div>
+                                        <Badge
+                                            className={cn(
+                                                'text-[10px] px-1.5 shrink-0 ml-3',
+                                                form.status === 'ACTIVE'
+                                                    ? 'bg-green-500/10 text-green-700 border-green-500/20 hover:bg-green-500/10'
+                                                    : 'bg-muted text-muted-foreground border',
+                                            )}
+                                        >
+                                            {form.status === 'ACTIVE' ? 'Ativo' : form.status}
+                                        </Badge>
+                                    </div>
+                                ))
+                            )}
+                        </>
+                    )}
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                    {selectedPage ? (
+                        <Button variant="ghost" size="sm" onClick={() => setSelectedPage(null)} className="gap-1.5">
+                            ← Voltar às páginas
+                        </Button>
+                    ) : (
+                        <span />
+                    )}
+                    <Button variant="outline" size="sm" onClick={handleClose}>Fechar</Button>
+                </div>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
+// ─── Meta connection card ─────────────────────────────────────────────────────
+
+function MetaConnectionCard({
+    connection,
+    enterpriseId,
+    onDelete,
+}: {
+    connection: Connection
+    enterpriseId: string
+    onDelete: (c: Connection) => void
+}) {
+    const [showForms, setShowForms] = useState(false)
+    const config = (connection.config ?? {}) as { accountName?: string }
+
+    return (
+        <>
+            <div className="flex items-center gap-4 rounded-lg border bg-card p-4 hover:bg-muted/20 transition-colors">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-blue-600/10 text-blue-600">
+                    <MetaIcon className="size-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-medium truncate">{connection.name}</p>
+                        <StatusBadge status={connection.status} />
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                        Facebook & Instagram Leads
+                        {config.accountName && ` · ${config.accountName}`}
+                    </p>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs gap-1.5"
+                        onClick={() => setShowForms(true)}
+                    >
+                        <MessageSquare className="size-3.5" />
+                        Formulários
+                    </Button>
+                    <Button
+                        size="icon"
+                        variant="ghost"
+                        className="size-7 text-muted-foreground hover:text-destructive"
+                        onClick={() => onDelete(connection)}
+                    >
+                        <Trash2 className="size-3.5" />
+                    </Button>
+                </div>
+            </div>
+
+            <MetaFormsDialog
+                enterpriseId={enterpriseId}
+                connectionId={connection.id}
+                connectionName={connection.name}
+                open={showForms}
+                onClose={() => setShowForms(false)}
+            />
+        </>
+    )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ConnectionsPage() {
@@ -627,6 +1145,7 @@ export default function ConnectionsPage() {
     const enterpriseId = enterprise?.id ?? ''
 
     const [showVoipCreate, setShowVoipCreate] = useState(false)
+    const [showMetaCreate, setShowMetaCreate] = useState(false)
     const [deleteSubTarget, setDeleteSubTarget] = useState<WhatsappSubscription | null>(null)
     const [deleteConnTarget, setDeleteConnTarget] = useState<Connection | null>(null)
 
@@ -640,11 +1159,14 @@ export default function ConnectionsPage() {
     // VoIP connections (não gerenciadas por assinatura)
     const voipConnections = connections.filter(c => c.type === 'VOIP')
 
+    // Conexões Meta
+    const metaConnections = connections.filter(c => c.type === 'META')
+
     // Assinaturas ativas ou pendentes (não canceladas)
     const activeSubs = waSubs.filter(s => s.status !== 'CANCELLED')
 
     // Contagem para uso
-    const totalConnections = voipConnections.length + activeSubs.filter(s => s.status === 'ACTIVE').length
+    const totalConnections = voipConnections.length + metaConnections.length + activeSubs.filter(s => s.status === 'ACTIVE').length
 
     function confirmDeleteSub() {
         if (!deleteSubTarget) return
@@ -662,7 +1184,7 @@ export default function ConnectionsPage() {
         })
     }
 
-    const hasAnything = activeSubs.length > 0 || voipConnections.length > 0
+    const hasAnything = activeSubs.length > 0 || voipConnections.length > 0 || metaConnections.length > 0
 
     return (
         <div className="flex flex-col h-full">
@@ -675,10 +1197,16 @@ export default function ConnectionsPage() {
                         Gerencie seus canais de atendimento e integrações
                     </p>
                 </div>
-                <Button variant="outline" onClick={() => setShowVoipCreate(true)} className="gap-1.5">
-                    <Phone className="size-4" />
-                    Adicionar VoIP
-                </Button>
+                <div className="flex items-center gap-2">
+                    <Button variant="outline" onClick={() => setShowMetaCreate(true)} className="gap-1.5">
+                        <MetaIcon className="size-4" />
+                        Conectar Meta
+                    </Button>
+                    <Button variant="outline" onClick={() => setShowVoipCreate(true)} className="gap-1.5">
+                        <Phone className="size-4" />
+                        Adicionar VoIP
+                    </Button>
+                </div>
             </div>
 
             {/* ── Contador ───────────────────────────────────────────────── */}
@@ -749,6 +1277,27 @@ export default function ConnectionsPage() {
                             </div>
                         </div>
 
+                        {/* ── Meta ── */}
+                        {metaConnections.length > 0 && (
+                            <div>
+                                <div className="flex items-center gap-2 mb-3">
+                                    <MetaIcon className="size-4 text-blue-600" />
+                                    <h2 className="text-sm font-semibold">Facebook & Instagram Leads</h2>
+                                    <Badge variant="secondary" className="text-xs">{metaConnections.length}</Badge>
+                                </div>
+                                <div className="flex flex-col gap-3">
+                                    {metaConnections.map(c => (
+                                        <MetaConnectionCard
+                                            key={c.id}
+                                            connection={c}
+                                            enterpriseId={enterpriseId}
+                                            onDelete={setDeleteConnTarget}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
                         {/* ── VoIP ── */}
                         {voipConnections.length > 0 && (
                             <div>
@@ -777,7 +1326,7 @@ export default function ConnectionsPage() {
                                 <h2 className="text-sm font-semibold text-muted-foreground">Em breve</h2>
                             </div>
                             <div className="flex flex-wrap gap-2">
-                                {['Instagram', 'Telegram', 'Webhook', 'API'].map(label => (
+                                {['Telegram', 'Webhook', 'API'].map(label => (
                                     <div key={label} className="flex items-center gap-1.5 rounded-lg border border-dashed px-3 py-2 text-xs text-muted-foreground/60">
                                         {label}
                                     </div>
@@ -790,11 +1339,18 @@ export default function ConnectionsPage() {
 
             {/* ── Dialogs ────────────────────────────────────────────────── */}
             {enterprise && (
-                <VoipDialog
-                    enterpriseId={enterpriseId}
-                    open={showVoipCreate}
-                    onClose={() => setShowVoipCreate(false)}
-                />
+                <>
+                    <MetaDialog
+                        enterpriseId={enterpriseId}
+                        open={showMetaCreate}
+                        onClose={() => setShowMetaCreate(false)}
+                    />
+                    <VoipDialog
+                        enterpriseId={enterpriseId}
+                        open={showVoipCreate}
+                        onClose={() => setShowVoipCreate(false)}
+                    />
+                </>
             )}
 
             {/* Cancelar assinatura WhatsApp */}

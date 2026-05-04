@@ -418,14 +418,14 @@ export function PipelineMetaIntegrationSheet({ open, onOpenChange, enterpriseId,
                                     </div>
                                     <ChevronRight className="size-3.5 text-muted-foreground shrink-0" />
                                     <Select
-                                        value={mappings[field.key] ?? ''}
-                                        onValueChange={v => setMapping(field.key, v)}
+                                        value={mappings[field.key] || '__ignore__'}
+                                        onValueChange={v => setMapping(field.key, v === '__ignore__' ? '' : v)}
                                     >
                                         <SelectTrigger className="w-44 h-8 text-xs">
                                             <SelectValue placeholder="Ignorar" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="">Ignorar</SelectItem>
+                                            <SelectItem value="__ignore__">Ignorar</SelectItem>
                                             {TARGET_OPTIONS.map(opt => (
                                                 <SelectItem key={opt.value} value={opt.value}>
                                                     {opt.label}

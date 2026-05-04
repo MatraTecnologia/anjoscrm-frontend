@@ -64,10 +64,12 @@ import { useLeads, useCreateLead, useUpdateLead } from '@/services/leads'
 import { useMembers } from '@/services/enterprises'
 import { useListTags } from '@/services/tags'
 import { useConnections } from '@/services/connections'
+import { useGetPipelineMetaIntegration } from '@/services/meta'
 import { useMessages, useSendMessage, useChatSocket } from '@/services/chat'
 import { keys } from '@/lib/keys'
 import { CadenceConfigSheet } from '@/components/cadence-config-sheet'
 import { PipelineMetaIntegrationSheet } from '@/components/pipeline-meta-integration-sheet'
+import { MetaLeadsImportDialog } from '@/components/meta-leads-import-dialog'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -275,7 +277,14 @@ function DealCardBody({
                             </button>
                             <span className="text-[10px] text-muted-foreground flex-shrink-0">#{index + 1}</span>
                         </div>
-                        <p className="text-[11px] text-muted-foreground truncate mt-0.5">{deal.lead.name}</p>
+                        <div className="flex items-center gap-1 mt-0.5">
+                            <p className="text-[11px] text-muted-foreground truncate">{deal.lead.name}</p>
+                            {deal.lead.origem?.toLowerCase().includes('meta') && (
+                                <span className="shrink-0 inline-flex items-center rounded px-1 py-0 text-[9px] font-semibold bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400 leading-tight">
+                                    META
+                                </span>
+                            )}
+                        </div>
                     </div>
 
                     {/* Menu */}
@@ -2215,6 +2224,8 @@ export default function PipelinePage() {
 
     // Meta integration sheet state
     const [integrationOpen, setIntegrationOpen] = useState(false)
+    const [importOpen, setImportOpen] = useState(false)
+    const { data: metaIntegration } = useGetPipelineMetaIntegration(enterpriseId, id)
 
     // Webhook dialog state
     const [webhookOpen, setWebhookOpen] = useState(false)
@@ -2381,7 +2392,29 @@ export default function PipelinePage() {
             <div className="flex items-center justify-between gap-4 px-5 py-3 border-b flex-shrink-0">
                 <div className="flex items-center gap-4 min-w-0">
                     <div className="flex-shrink-0">
-                        <h1 className="text-base font-semibold leading-tight">{pipeline.name}</h1>
+                        <div className="flex items-center gap-2">
+                            <h1 className="text-base font-semibold leading-tight">{pipeline.name}</h1>
+                            {metaIntegration?.isActive && (
+                                <div className="flex items-center gap-1">
+                                    <button
+                                        onClick={() => setIntegrationOpen(true)}
+                                        title={`Meta Lead Ads · ${metaIntegration.formName}`}
+                                        className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/60 transition-colors"
+                                    >
+                                        <Zap className="size-2.5" />
+                                        Meta Lead Ads
+                                    </button>
+                                    <button
+                                        onClick={() => setImportOpen(true)}
+                                        title="Importar leads antigos do formulário"
+                                        className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground transition-colors border"
+                                    >
+                                        <Package className="size-2.5" />
+                                        Importar leads
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                         <p className="text-xs text-muted-foreground">{pipeline.description ?? 'Funil de vendas'}</p>
                     </div>
 
@@ -2680,6 +2713,17 @@ export default function PipelinePage() {
                 pipelineId={id}
                 stages={pipeline.stages}
             />
+
+            {/* Meta Leads Import Dialog */}
+            {metaIntegration && (
+                <MetaLeadsImportDialog
+                    open={importOpen}
+                    onOpenChange={setImportOpen}
+                    enterpriseId={enterpriseId}
+                    pipelineId={id}
+                    formName={metaIntegration.formName}
+                />
+            )}
 
             {/* Edit Pipeline Dialog */}
             <Dialog open={editOpen} onOpenChange={setEditOpen}>

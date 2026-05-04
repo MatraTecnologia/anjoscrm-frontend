@@ -51,9 +51,17 @@ export type PipelineMetaIntegration = {
     formName: string
     initialStageId: string | null
     fieldMappings: FieldMapping[]
+    importedMetaLeadIds: string[]
     isActive: boolean
     createdAt: string
     updatedAt: string
+}
+
+export type MetaFormLead = {
+    id: string
+    createdTime: string
+    fields: Record<string, string>
+    isImported: boolean
 }
 
 // ─── API ──────────────────────────────────────────────────────────────────────
@@ -203,6 +211,37 @@ async function deletePipelineMetaIntegrationFn({
     })
 }
 
+async function getMetaFormLeadsFn({
+    enterpriseId,
+    pipelineId,
+}: {
+    enterpriseId: string
+    pipelineId: string
+}): Promise<{ leads: MetaFormLead[] }> {
+    const { data } = await api.get<{ leads: MetaFormLead[] }>(
+        `/meta/pipeline-integrations/${pipelineId}/form-leads`,
+        { headers: { 'X-Enterprise-Id': enterpriseId } },
+    )
+    return data
+}
+
+async function importMetaFormLeadsFn({
+    enterpriseId,
+    pipelineId,
+    metaLeadIds,
+}: {
+    enterpriseId: string
+    pipelineId: string
+    metaLeadIds: string[]
+}): Promise<{ imported: number; skipped: number; failed: number }> {
+    const { data } = await api.post<{ imported: number; skipped: number; failed: number }>(
+        `/meta/pipeline-integrations/${pipelineId}/import`,
+        { metaLeadIds },
+        { headers: { 'X-Enterprise-Id': enterpriseId } },
+    )
+    return data
+}
+
 // ─── Hooks ────────────────────────────────────────────────────────────────────
 
 export function useGetMetaAuthUrl() {
@@ -280,6 +319,26 @@ export function useDeletePipelineMetaIntegration() {
     return useMutation({
         mutationFn: deletePipelineMetaIntegrationFn,
         onSuccess: (_data, { pipelineId }) => {
+            queryClient.invalidateQueries({ queryKey: ['meta', 'pipeline-integration', pipelineId] })
+        },
+    })
+}
+
+export function useGetMetaFormLeads(enterpriseId: string, pipelineId: string, enabled = false) {
+    return useQuery({
+        queryKey: ['meta', 'form-leads', pipelineId],
+        queryFn: () => getMetaFormLeadsFn({ enterpriseId, pipelineId }),
+        enabled: !!enterpriseId && !!pipelineId && enabled,
+        staleTime: 0,
+    })
+}
+
+export function useImportMetaFormLeads() {
+    const queryClient = useQueryClient()
+    return useMutation({
+        mutationFn: importMetaFormLeadsFn,
+        onSuccess: (_data, { pipelineId }) => {
+            queryClient.invalidateQueries({ queryKey: ['meta', 'form-leads', pipelineId] })
             queryClient.invalidateQueries({ queryKey: ['meta', 'pipeline-integration', pipelineId] })
         },
     })

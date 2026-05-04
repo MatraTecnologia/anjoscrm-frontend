@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import {
     ChevronRight, ChevronLeft, Loader2, Check, Trash2,
-    Zap, Facebook, FileText, LayoutList, ArrowRight,
+    Zap, Facebook, FileText, LayoutList, ArrowRight, Copy, Globe,
 } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
@@ -43,6 +43,49 @@ const TARGET_OPTIONS: TargetOption[] = [
     { value: 'deal.title',  label: 'Negócio · Título',     targetType: 'deal', targetField: 'title' },
     { value: 'deal.value',  label: 'Negócio · Valor',      targetType: 'deal', targetField: 'value' },
 ]
+
+// ─── Webhook URL Box ──────────────────────────────────────────────────────────
+
+function WebhookUrlBox() {
+    const [copied, setCopied] = useState(false)
+    const backendUrl = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3333').replace(/\/$/, '')
+    const webhookUrl = `${backendUrl}/meta/webhook`
+
+    function copy() {
+        navigator.clipboard.writeText(webhookUrl)
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+    }
+
+    return (
+        <div className="space-y-1.5">
+            <div className="flex items-center gap-1.5">
+                <Globe className="size-3.5 text-muted-foreground" />
+                <p className="text-sm font-medium">URL do Webhook</p>
+            </div>
+            <p className="text-xs text-muted-foreground">
+                Configure esta URL no <strong>Meta for Developers</strong> em
+                {' '}Webhooks → Assinar → campo <code className="bg-muted px-1 rounded">leadgen</code>.
+            </p>
+            <div className="flex items-center gap-2 rounded-lg border bg-muted/40 px-3 py-2">
+                <code className="flex-1 text-xs truncate text-foreground">{webhookUrl}</code>
+                <button
+                    onClick={copy}
+                    className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                    title="Copiar URL"
+                >
+                    {copied
+                        ? <Check className="size-3.5 text-green-500" />
+                        : <Copy className="size-3.5" />
+                    }
+                </button>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+                Token de verificação: configure <code className="bg-muted px-1 rounded">META_WEBHOOK_VERIFY_TOKEN</code> no backend e use o mesmo valor no Meta.
+            </p>
+        </div>
+    )
+}
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -383,6 +426,9 @@ export function PipelineMetaIntegrationSheet({ open, onOpenChange, enterpriseId,
                     <p className="text-sm font-medium">{selectedPage?.pageName} · {selectedForm?.name}</p>
                 </div>
 
+                {/* Webhook URL */}
+                <WebhookUrlBox />
+
                 {/* Initial stage */}
                 <div className="space-y-1.5">
                     <p className="text-sm font-medium">Estágio inicial</p>
@@ -444,7 +490,7 @@ export function PipelineMetaIntegrationSheet({ open, onOpenChange, enterpriseId,
 
     return (
         <Sheet open={open} onOpenChange={handleClose}>
-            <SheetContent className="sm:max-w-md flex flex-col gap-0 p-0">
+            <SheetContent className="sm:max-w-xl flex flex-col gap-0 p-0">
                 <SheetHeader className="px-6 pt-6 pb-4 border-b shrink-0">
                     <SheetTitle className="flex items-center gap-2">
                         <Zap className="size-4 text-primary" />

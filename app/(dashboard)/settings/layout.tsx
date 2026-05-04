@@ -32,7 +32,6 @@ const settingsNav = [
     { href: '/settings/tags', icon: Tag, label: 'Tags' },
     { href: '/settings/products', icon: Package, label: 'Produtos' },
     { href: '/settings/loss-reasons', icon: TrendingDown, label: 'Motivos de perda' },
-    { href: '/settings/lists', icon: List, label: 'Listas' },
     { href: '/settings/custom-fields', icon: LayoutGrid, label: 'Campos adicionais' },
     { href: '/settings/departments', icon: Users, label: 'Departamentos' },
     { href: '/settings/work-hours', icon: Clock, label: 'Horários de trabalho' },

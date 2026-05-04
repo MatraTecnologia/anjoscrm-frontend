@@ -13,6 +13,7 @@ export type DealLead = {
     email: string | null
     phone: string | null
     image: string | null
+    origem: string | null
     tags: Tag[]
     assignee: { id: string; name: string; image: string | null } | null
 }

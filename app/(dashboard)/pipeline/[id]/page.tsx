@@ -1436,7 +1436,7 @@ function KanbanColumn({
                     <button
                         type="button"
                         className="size-2.5 rounded-full flex-shrink-0 ring-offset-background hover:ring-2 hover:ring-offset-1 transition-all"
-                        style={{ backgroundColor: stage.color, ringColor: stage.color }}
+                        style={{ backgroundColor: stage.color }}
                         onClick={() => colorInputRef.current?.click()}
                         title="Alterar cor"
                     />

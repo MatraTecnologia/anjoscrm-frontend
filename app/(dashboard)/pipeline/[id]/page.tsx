@@ -51,7 +51,7 @@ import { usePipelineSocket } from '@/hooks/use-pipeline-socket'
 import {
     useGetPipeline, useUpdatePipeline, useDeletePipeline, useGetBilateralConfig,
     useGetStageFollowUpConfig, useUpsertStageFollowUpConfig, useGetPipelineFollowUpBoard,
-    useCreateStage, useDeleteStage,
+    useCreateStage, useUpdateStage, useDeleteStage,
     type PipelineStage, type StageFollowUpConfig, type FollowUpAction, type FollowUpActionType, type FollowUpStep, type FollowUpBoardDeal,
 } from '@/services/pipelines'
 import {
@@ -1329,8 +1329,27 @@ function KanbanColumn({
     const scrollRef = useRef<HTMLDivElement>(null)
     const { setNodeRef: setDropRef, isOver } = useDroppable({ id: stage.id })
     const deleteStage = useDeleteStage()
+    const updateStage = useUpdateStage()
     const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
     const [cadenceOpen, setCadenceOpen] = useState(false)
+    const [editingName, setEditingName] = useState(false)
+    const [draftName, setDraftName] = useState(stage.name)
+    const colorInputRef = useRef<HTMLInputElement>(null)
+
+    function saveNameEdit() {
+        const trimmed = draftName.trim()
+        if (!trimmed || trimmed === stage.name) { setEditingName(false); setDraftName(stage.name); return }
+        updateStage.mutate(
+            { stageId: stage.id, enterpriseId, name: trimmed },
+            { onSuccess: () => setEditingName(false), onError: (e) => { toast.error(e.message); setDraftName(stage.name); setEditingName(false) } },
+        )
+    }
+    function saveColorEdit(color: string) {
+        updateStage.mutate(
+            { stageId: stage.id, enterpriseId, color },
+            { onError: (e) => toast.error(e.message) },
+        )
+    }
 
     const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
         useStageDeals(stage.id, enterpriseId, sort)
@@ -1413,9 +1432,47 @@ function KanbanColumn({
             {/* Header */}
             <div className="px-3 pt-3 pb-2">
                 <div className="group flex items-center gap-1.5">
-                    <span className="size-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: stage.color }} />
-                    <span className="text-sm font-semibold truncate">{stage.name}</span>
-                    <span className="ml-auto text-xs text-muted-foreground font-mono">
+                    {/* Cor — clique abre color picker nativo */}
+                    <button
+                        type="button"
+                        className="size-2.5 rounded-full flex-shrink-0 ring-offset-background hover:ring-2 hover:ring-offset-1 transition-all"
+                        style={{ backgroundColor: stage.color, ringColor: stage.color }}
+                        onClick={() => colorInputRef.current?.click()}
+                        title="Alterar cor"
+                    />
+                    <input
+                        ref={colorInputRef}
+                        type="color"
+                        defaultValue={stage.color}
+                        onChange={e => saveColorEdit(e.target.value)}
+                        className="sr-only"
+                    />
+
+                    {/* Nome — clique entra em edição */}
+                    {editingName ? (
+                        <input
+                            autoFocus
+                            value={draftName}
+                            onChange={e => setDraftName(e.target.value)}
+                            onBlur={saveNameEdit}
+                            onKeyDown={e => {
+                                if (e.key === 'Enter') saveNameEdit()
+                                if (e.key === 'Escape') { setEditingName(false); setDraftName(stage.name) }
+                            }}
+                            className="flex-1 min-w-0 text-sm font-semibold bg-background border rounded px-1 py-0 h-6 focus:outline-none focus:ring-1 focus:ring-ring"
+                        />
+                    ) : (
+                        <button
+                            type="button"
+                            className="text-sm font-semibold truncate flex-1 min-w-0 text-left hover:text-primary transition-colors"
+                            onClick={() => { setDraftName(stage.name); setEditingName(true) }}
+                            title="Clique para renomear"
+                        >
+                            {stage.name}
+                        </button>
+                    )}
+
+                    <span className="text-xs text-muted-foreground font-mono shrink-0">
                         {(search || filters?.tagIds.length || filters?.assigneeId || filters?.minValue || filters?.maxValue)
                             ? `${filteredDeals.length}/${total}`
                             : total
@@ -1428,6 +1485,15 @@ function KanbanColumn({
                             </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuItem className="text-xs" onClick={() => { setDraftName(stage.name); setEditingName(true) }}>
+                                <Pencil className="size-3.5 mr-2" />
+                                Renomear
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="text-xs" onClick={() => colorInputRef.current?.click()}>
+                                <span className="size-3.5 mr-2 rounded-full border flex-shrink-0 inline-block" style={{ backgroundColor: stage.color }} />
+                                Alterar cor
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
                             <DropdownMenuItem
                                 className="text-xs"
                                 onClick={() => setCadenceOpen(true)}

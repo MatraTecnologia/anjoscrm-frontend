@@ -10,7 +10,7 @@ import {
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 
@@ -25,6 +25,7 @@ import {
     type MetaForm,
     type FieldMapping,
 } from '@/services/meta'
+import { useCustomFields } from '@/services/custom-fields'
 import type { PipelineStage } from '@/services/pipelines'
 
 // ─── Target field options ─────────────────────────────────────────────────────
@@ -158,6 +159,9 @@ export function PipelineMetaIntegrationSheet({ open, onOpenChange, enterpriseId,
         fieldsEnabled,
     )
 
+    // Lead custom fields (for mapping destinations)
+    const { data: customFields = [] } = useCustomFields(enterpriseId, 'lead')
+
     // Existing integration
     const { data: existing, isLoading: existingLoading } = useGetPipelineMetaIntegration(
         enterpriseId,
@@ -235,6 +239,17 @@ export function PipelineMetaIntegrationSheet({ open, onOpenChange, enterpriseId,
             .filter(([, v]) => !!v)
             .map(([formField, targetCombo]) => {
                 const field = fieldsData?.fields.find(f => f.key === formField)
+                if (targetCombo.startsWith('custom.')) {
+                    const fieldId = targetCombo.slice(7)
+                    const cf = customFields.find(c => c.id === fieldId)
+                    return {
+                        formField,
+                        formFieldLabel: field?.label ?? formField,
+                        targetType: 'custom' as const,
+                        targetField: fieldId,
+                        targetFieldLabel: cf?.name,
+                    }
+                }
                 const opt = TARGET_OPTIONS.find(o => o.value === targetCombo)!
                 return {
                     formField,
@@ -472,11 +487,27 @@ export function PipelineMetaIntegrationSheet({ open, onOpenChange, enterpriseId,
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="__ignore__">Ignorar</SelectItem>
-                                            {TARGET_OPTIONS.map(opt => (
-                                                <SelectItem key={opt.value} value={opt.value}>
-                                                    {opt.label}
-                                                </SelectItem>
-                                            ))}
+                                            <SelectGroup>
+                                                <SelectLabel className="text-[10px]">Campos padrão</SelectLabel>
+                                                {TARGET_OPTIONS.map(opt => (
+                                                    <SelectItem key={opt.value} value={opt.value}>
+                                                        {opt.label}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectGroup>
+                                            {customFields.length > 0 && (
+                                                <>
+                                                    <SelectSeparator />
+                                                    <SelectGroup>
+                                                        <SelectLabel className="text-[10px]">Campos customizados</SelectLabel>
+                                                        {customFields.map(cf => (
+                                                            <SelectItem key={cf.id} value={`custom.${cf.id}`}>
+                                                                Lead · {cf.name}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectGroup>
+                                                </>
+                                            )}
                                         </SelectContent>
                                     </Select>
                                 </div>

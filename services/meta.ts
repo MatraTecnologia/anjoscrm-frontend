@@ -36,8 +36,9 @@ export type MetaFormField = {
 export type FieldMapping = {
     formField: string
     formFieldLabel: string
-    targetType: 'lead' | 'deal'
-    targetField: string
+    targetType: 'lead' | 'deal' | 'custom'
+    targetField: string   // para custom: id do LeadCustomFieldDef
+    targetFieldLabel?: string
 }
 
 export type PipelineMetaIntegration = {

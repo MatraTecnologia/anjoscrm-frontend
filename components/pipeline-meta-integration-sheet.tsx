@@ -9,7 +9,7 @@ import {
 
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
@@ -520,15 +520,15 @@ export function PipelineMetaIntegrationSheet({ open, onOpenChange, enterpriseId,
     }
 
     return (
-        <Sheet open={open} onOpenChange={handleClose}>
-            <SheetContent className="sm:max-w-xl flex flex-col gap-0 p-0">
-                <SheetHeader className="px-6 pt-6 pb-4 border-b shrink-0">
-                    <SheetTitle className="flex items-center gap-2">
+        <Dialog open={open} onOpenChange={handleClose}>
+            <DialogContent className="w-[90vw] max-w-[90vw] h-[90vh] flex flex-col gap-0 p-0">
+                <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
+                    <DialogTitle className="flex items-center gap-2">
                         <Zap className="size-4 text-primary" />
                         Integração Meta Lead Ads
-                    </SheetTitle>
+                    </DialogTitle>
                     <StepIndicator current={step} />
-                </SheetHeader>
+                </DialogHeader>
 
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto px-6 py-4">
@@ -589,7 +589,7 @@ export function PipelineMetaIntegrationSheet({ open, onOpenChange, enterpriseId,
                         </Button>
                     )}
                 </div>
-            </SheetContent>
-        </Sheet>
+            </DialogContent>
+        </Dialog>
     )
 }

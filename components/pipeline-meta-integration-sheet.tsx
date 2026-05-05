@@ -521,7 +521,7 @@ export function PipelineMetaIntegrationSheet({ open, onOpenChange, enterpriseId,
 
     return (
         <Dialog open={open} onOpenChange={handleClose}>
-            <DialogContent className="w-[90vw] max-w-[90vw] h-[90vh] flex flex-col gap-0 p-0">
+            <DialogContent className="!w-[90vw] !max-w-[90vw] h-[90vh] flex flex-col gap-0 p-0">
                 <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
                     <DialogTitle className="flex items-center gap-2">
                         <Zap className="size-4 text-primary" />

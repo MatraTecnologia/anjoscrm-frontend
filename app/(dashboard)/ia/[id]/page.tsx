@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import {
     ArrowLeft, Bot, Power, Loader2, Save,
     Upload, Trash2, FileText, Check,
-    Users, Settings, BookOpen, ShoppingBag, GitBranch, Zap, Plug,
+    Users, Settings, BookOpen, GitBranch, Zap, Plug,
     Info, MessageSquare, Send, RotateCcw, UserCheck,
     RotateCw, UserCog, ArrowDownUp, HandHelping,
     CreditCard, QrCode, Landmark, Receipt,
@@ -35,7 +35,6 @@ import {
 } from '@/services/ai-agents'
 import { useConnections } from '@/services/connections'
 import { useListPipelines } from '@/services/pipelines'
-import { useListProducts, type Product } from '@/services/products'
 import { useMembers } from '@/services/enterprises'
 import { cn } from '@/lib/utils'
 
@@ -45,7 +44,6 @@ const TABS = [
     { id: 'geral', label: 'Geral', icon: Settings },
     { id: 'comportamento', label: 'Comportamento', icon: Zap },
     { id: 'conhecimento', label: 'Conhecimento', icon: BookOpen },
-    { id: 'produtos', label: 'Produtos', icon: ShoppingBag },
     { id: 'pipeline', label: 'Pipeline', icon: GitBranch },
     { id: 'conexao', label: 'Conexão', icon: Plug },
     { id: 'leads', label: 'Leads', icon: Users },
@@ -481,93 +479,6 @@ function TabConhecimento({ agentId, enterpriseId }: { agentId: string; enterpris
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
-        </div>
-    )
-}
-
-// ─── Tab Produtos ─────────────────────────────────────────────────────────────
-
-function TabProdutos({ agentId, enterpriseId }: { agentId: string; enterpriseId: string }) {
-    const { data: agent } = useAiAgent(agentId, enterpriseId)
-    const { data: products = [] } = useListProducts(enterpriseId)
-    const { mutate: update, isPending } = useUpdateAiAgent()
-
-    const currentIds = agent?.products?.map(p => p.product.id) ?? []
-    const [selected, setSelected] = useState<string[]>(currentIds)
-
-    if (!agent) return null
-
-    function toggle(id: string) {
-        setSelected(prev =>
-            prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id],
-        )
-    }
-
-    function handleSave() {
-        update({
-            id: agentId,
-            enterpriseId,
-            payload: { productIds: selected },
-        }, {
-            onSuccess: () => toast.success('Produtos atualizados!'),
-            onError: () => toast.error('Erro ao salvar.'),
-        })
-    }
-
-    return (
-        <div className="flex flex-col gap-5 max-w-lg">
-            <p className="text-sm text-muted-foreground">
-                Selecione os produtos que este agente pode apresentar e vender.
-            </p>
-
-            {products.length === 0 ? (
-                <div className="flex flex-col items-center gap-2 py-8 text-center text-muted-foreground">
-                    <Info className="size-8" />
-                    <p className="text-sm">Nenhum produto cadastrado</p>
-                    <p className="text-xs">Vá em Configurações → Produtos para cadastrar</p>
-                </div>
-            ) : (
-                <div className="flex flex-col gap-2">
-                    {products.map((p: Product) => {
-                        const isSelected = selected.includes(p.id)
-                        return (
-                            <button
-                                key={p.id}
-                                type="button"
-                                onClick={() => toggle(p.id)}
-                                className={cn(
-                                    'flex items-center gap-3 rounded-lg border p-3 text-left transition-colors',
-                                    isSelected ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted',
-                                )}
-                            >
-                                <div className={cn(
-                                    'flex size-5 shrink-0 items-center justify-center rounded border transition-colors',
-                                    isSelected ? 'bg-primary border-primary' : 'border-border',
-                                )}>
-                                    {isSelected && <Check className="size-3 text-primary-foreground" />}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium truncate">{p.name}</p>
-                                    {p.price != null && (
-                                        <p className="text-xs text-muted-foreground">
-                                            R$ {Number(p.price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                        </p>
-                                    )}
-                                </div>
-                            </button>
-                        )
-                    })}
-                </div>
-            )}
-
-            <Button
-                onClick={handleSave}
-                disabled={isPending || products.length === 0}
-                className="self-start gap-1.5"
-            >
-                {isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-                Salvar
-            </Button>
         </div>
     )
 }
@@ -1367,7 +1278,6 @@ export default function IaDetailPage({ params }: { params: Promise<{ id: string 
                 {activeTab === 'geral' && <TabGeral agentId={id} enterpriseId={enterpriseId} />}
                 {activeTab === 'comportamento' && <TabComportamento agentId={id} enterpriseId={enterpriseId} />}
                 {activeTab === 'conhecimento' && <TabConhecimento agentId={id} enterpriseId={enterpriseId} />}
-                {activeTab === 'produtos' && <TabProdutos agentId={id} enterpriseId={enterpriseId} />}
                 {activeTab === 'pipeline' && <TabPipeline agentId={id} enterpriseId={enterpriseId} />}
                 {activeTab === 'conexao' && <TabConexao agentId={id} enterpriseId={enterpriseId} />}
                 {activeTab === 'leads' && <TabLeads agentId={id} enterpriseId={enterpriseId} />}

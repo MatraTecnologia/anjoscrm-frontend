@@ -37,7 +37,7 @@ import {
     useListGroups, useListPipelines,
     useCreateGroup, useDeleteGroup, useReorderGroups,
     useCreatePipeline, useUpdatePipeline, useDeletePipeline, useReorderPipelines,
-    useCreateStage, useDeleteStage,
+    useCreateStage, useUpdateStage, useDeleteStage,
     useActivateBilateral, useGetBilateralConfig, useKommoPipelines,
     type PipelineGroup, type Pipeline, type PipelineStage,
 } from '@/services/pipelines'
@@ -46,7 +46,7 @@ import { api } from '@/lib/api'
 
 // ─── Stage helpers ────────────────────────────────────────────────────────────
 
-type StageItem = { tempId: string; name: string; color: string; kommoStatusId?: number }
+type StageItem = { id?: string; tempId: string; name: string; color: string; kommoStatusId?: number }
 
 const DEFAULT_PIPELINE_STAGES: StageItem[] = [
     { tempId: 'def-0', name: 'Prospecção', color: '#6b7280' },
@@ -55,6 +55,47 @@ const DEFAULT_PIPELINE_STAGES: StageItem[] = [
     { tempId: 'def-3', name: 'Negociação', color: '#f59e0b' },
     { tempId: 'def-4', name: 'Ganho', color: '#10b981' },
     { tempId: 'def-5', name: 'Perdido', color: '#ef4444' },
+]
+
+const STAGE_TEMPLATES = [
+    { id: 'vendas', label: 'Vendas B2B', stages: [
+        { name: 'Prospecção', color: '#6b7280' },
+        { name: 'Qualificação', color: '#3b82f6' },
+        { name: 'Proposta', color: '#8b5cf6' },
+        { name: 'Negociação', color: '#f59e0b' },
+        { name: 'Ganho', color: '#10b981' },
+        { name: 'Perdido', color: '#ef4444' },
+    ]},
+    { id: 'imoveis', label: 'Imóveis', stages: [
+        { name: 'Captação', color: '#6b7280' },
+        { name: 'Visita agendada', color: '#3b82f6' },
+        { name: 'Proposta', color: '#8b5cf6' },
+        { name: 'Documentação', color: '#f59e0b' },
+        { name: 'Fechamento', color: '#10b981' },
+        { name: 'Perdido', color: '#ef4444' },
+    ]},
+    { id: 'sdr', label: 'SDR', stages: [
+        { name: 'Novo contato', color: '#6b7280' },
+        { name: 'Tentativa 1', color: '#3b82f6' },
+        { name: 'Tentativa 2', color: '#8b5cf6' },
+        { name: 'Reunião agendada', color: '#10b981' },
+        { name: 'Sem interesse', color: '#ef4444' },
+    ]},
+    { id: 'recrutamento', label: 'Recrutamento', stages: [
+        { name: 'Triagem', color: '#6b7280' },
+        { name: 'Entrevista RH', color: '#3b82f6' },
+        { name: 'Entrevista técnica', color: '#8b5cf6' },
+        { name: 'Proposta', color: '#f59e0b' },
+        { name: 'Contratado', color: '#10b981' },
+        { name: 'Reprovado', color: '#ef4444' },
+    ]},
+    { id: 'cs', label: 'Customer Success', stages: [
+        { name: 'Onboarding', color: '#6b7280' },
+        { name: 'Implementação', color: '#3b82f6' },
+        { name: 'Ativo', color: '#10b981' },
+        { name: 'Renovação', color: '#f59e0b' },
+        { name: 'Churn', color: '#ef4444' },
+    ]},
 ]
 
 // ─── Ícone funil ──────────────────────────────────────────────────────────────
@@ -67,6 +108,52 @@ function FunnelIcon({ color }: { color: string }) {
                 fill={color} stroke={color} strokeWidth="0.5" strokeLinejoin="round"
             />
         </svg>
+    )
+}
+
+// ─── Sortable Stage Row (criação e edição) ────────────────────────────────────
+
+function SortableStageRow({ item, index, onUpdate, onRemove }: {
+    item: StageItem
+    index: number
+    onUpdate: (i: number, field: 'name' | 'color', value: string) => void
+    onRemove: (i: number) => void
+}) {
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.tempId })
+    return (
+        <div
+            ref={setNodeRef}
+            style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}
+            className="flex items-center gap-2"
+        >
+            <button
+                {...attributes} {...listeners}
+                type="button"
+                className="cursor-grab p-0.5 text-muted-foreground hover:text-foreground shrink-0 touch-none"
+            >
+                <GripVertical className="size-4" />
+            </button>
+            <input
+                type="color"
+                value={item.color}
+                onChange={e => onUpdate(index, 'color', e.target.value)}
+                className="size-6 rounded cursor-pointer border flex-shrink-0"
+                title="Cor do estágio"
+            />
+            <Input
+                value={item.name}
+                onChange={e => onUpdate(index, 'name', e.target.value)}
+                className="h-7 text-xs flex-1"
+                placeholder="Nome do estágio"
+            />
+            <button
+                type="button"
+                onClick={() => onRemove(index)}
+                className="p-0.5 text-muted-foreground hover:text-destructive transition-colors flex-shrink-0"
+            >
+                <X className="size-3.5" />
+            </button>
+        </div>
     )
 }
 
@@ -282,6 +369,9 @@ export default function PipelineLayout({ children }: { children: React.ReactNode
     const [editName, setEditName] = useState('')
     const [editColor, setEditColor] = useState('#6366f1')
     const [editDesc, setEditDesc] = useState('')
+    const [editStages, setEditStages] = useState<StageItem[]>([])
+    const [deletedStageIds, setDeletedStageIds] = useState<string[]>([])
+    const [editTab, setEditTab] = useState<'info' | 'stages'>('info')
 
     // Webhook dialog
     const [webhookPipeline, setWebhookPipeline] = useState<Pipeline | null>(null)
@@ -290,6 +380,7 @@ export default function PipelineLayout({ children }: { children: React.ReactNode
     const createPipeline = useCreatePipeline()
     const deletePipeline = useDeletePipeline()
     const createStage = useCreateStage()
+    const updateStage = useUpdateStage()
     const deleteStage = useDeleteStage()
     const createGroup = useCreateGroup()
     const deleteGroup = useDeleteGroup()
@@ -327,6 +418,16 @@ export default function PipelineLayout({ children }: { children: React.ReactNode
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pKommoPipelineId])
 
+    // Popula editStages quando o pipeline de edição muda
+    useEffect(() => {
+        if (!editPipeline) return
+        setEditStages(
+            editPipeline.stages.map(s => ({ id: s.id, tempId: s.id, name: s.name, color: s.color }))
+        )
+        setDeletedStageIds([])
+        setEditTab('info')
+    }, [editPipeline?.id])
+
     function toggle(groupId: string) {
         setCollapsed(prev => {
             const next = new Set(prev)
@@ -344,6 +445,37 @@ export default function PipelineLayout({ children }: { children: React.ReactNode
     }
     function updatePStage(i: number, field: 'name' | 'color', value: string) {
         setPStages(prev => prev.map((s, idx) => idx === i ? { ...s, [field]: value } : s))
+    }
+    function handleDragEndStages(event: DragEndEvent) {
+        const { active, over } = event
+        if (!over || active.id === over.id) return
+        setPStages(prev => {
+            const oldIdx = prev.findIndex(s => s.tempId === active.id)
+            const newIdx = prev.findIndex(s => s.tempId === over.id)
+            return oldIdx === -1 || newIdx === -1 ? prev : arrayMove(prev, oldIdx, newIdx)
+        })
+    }
+
+    // Edit stages helpers
+    function addEditStage() {
+        setEditStages(prev => [...prev, { tempId: `new-${Date.now()}`, name: '', color: '#6366f1' }])
+    }
+    function removeEditStage(i: number) {
+        const stage = editStages[i]
+        if (stage.id) setDeletedStageIds(prev => [...prev, stage.id!])
+        setEditStages(prev => prev.filter((_, idx) => idx !== i))
+    }
+    function updateEditStage(i: number, field: 'name' | 'color', value: string) {
+        setEditStages(prev => prev.map((s, idx) => idx === i ? { ...s, [field]: value } : s))
+    }
+    function handleDragEndEditStages(event: DragEndEvent) {
+        const { active, over } = event
+        if (!over || active.id === over.id) return
+        setEditStages(prev => {
+            const oldIdx = prev.findIndex(s => s.tempId === active.id)
+            const newIdx = prev.findIndex(s => s.tempId === over.id)
+            return oldIdx === -1 || newIdx === -1 ? prev : arrayMove(prev, oldIdx, newIdx)
+        })
     }
 
     async function handleCreatePipeline() {
@@ -458,18 +590,62 @@ export default function PipelineLayout({ children }: { children: React.ReactNode
         setEditDesc(p.description ?? '')
     }
 
-    function handleSaveEdit() {
+    async function handleSaveEdit() {
         if (!enterprise?.id || !editPipeline || !editName.trim()) return
-        updatePipeline.mutate(
-            { id: editPipeline.id, enterpriseId: enterprise.id, name: editName.trim(), color: editColor, description: editDesc.trim() || undefined },
-            {
-                onSuccess: () => {
-                    setEditPipeline(null)
-                    toast.success('Pipeline atualizada.')
-                },
-                onError: (e) => toast.error(e.message),
-            },
-        )
+        try {
+            // 1. Salvar info da pipeline
+            await updatePipeline.mutateAsync({
+                id: editPipeline.id,
+                enterpriseId: enterprise.id,
+                name: editName.trim(),
+                color: editColor,
+                description: editDesc.trim() || undefined,
+            })
+
+            // 2. Deletar estágios removidos
+            for (const stageId of deletedStageIds) {
+                try {
+                    await deleteStage.mutateAsync({ stageId, enterpriseId: enterprise.id })
+                } catch (e: unknown) {
+                    const msg = (e as { message?: string })?.message ?? 'Erro ao excluir estágio.'
+                    toast.error(msg)
+                    return
+                }
+            }
+
+            // 3. Criar novos estágios (sem id) em ordem
+            for (const s of editStages.filter(s => !s.id)) {
+                if (!s.name.trim()) continue
+                await createStage.mutateAsync({
+                    pipelineId: editPipeline.id,
+                    enterpriseId: enterprise.id,
+                    name: s.name.trim(),
+                    color: s.color,
+                })
+            }
+
+            // 4. Atualizar estágios existentes (nome, cor, ordem)
+            const existing = editStages.filter(s => !!s.id)
+            const origMap = new Map(editPipeline.stages.map(s => [s.id, s]))
+            await Promise.all(
+                existing.map((s, idx) => {
+                    const orig = origMap.get(s.id!)
+                    if (orig?.name === s.name && orig?.color === s.color && orig?.order === idx) return
+                    return updateStage.mutateAsync({
+                        stageId: s.id!,
+                        enterpriseId: enterprise.id!,
+                        name: s.name,
+                        color: s.color,
+                        order: idx,
+                    })
+                })
+            )
+
+            setEditPipeline(null)
+            toast.success('Pipeline atualizada.')
+        } catch {
+            toast.error('Erro ao salvar pipeline.')
+        }
     }
 
     function handleDeletePipeline(p: Pipeline) {
@@ -778,7 +954,27 @@ export default function PipelineLayout({ children }: { children: React.ReactNode
                                 </>
                             ) : (
                                 /* Editor manual de estágios (sem bilateral) */
-                                <div className="flex flex-col gap-1.5">
+                                <div className="flex flex-col gap-2">
+                                    {/* Templates */}
+                                    <div className="flex flex-col gap-1.5">
+                                        <Label className="text-xs text-muted-foreground">Templates prontos</Label>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {STAGE_TEMPLATES.map(t => (
+                                                <button
+                                                    key={t.id}
+                                                    type="button"
+                                                    onClick={() => setPStages(
+                                                        t.stages.map((s, i) => ({ tempId: `tpl-${t.id}-${i}`, name: s.name, color: s.color }))
+                                                    )}
+                                                    className="px-2.5 py-1 rounded-full border text-xs hover:bg-muted transition-colors"
+                                                >
+                                                    {t.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Lista sortable */}
                                     <div className="flex items-center justify-between">
                                         <Label>Estágios</Label>
                                         <button
@@ -790,37 +986,33 @@ export default function PipelineLayout({ children }: { children: React.ReactNode
                                             Adicionar
                                         </button>
                                     </div>
-                                    <div className="flex flex-col gap-1 max-h-52 overflow-y-auto pr-1">
-                                        {pStages.map((s, i) => (
-                                            <div key={s.tempId} className="flex items-center gap-2">
-                                                <input
-                                                    type="color"
-                                                    value={s.color}
-                                                    onChange={(e) => updatePStage(i, 'color', e.target.value)}
-                                                    className="size-6 rounded cursor-pointer border flex-shrink-0"
-                                                    title="Cor do estágio"
-                                                />
-                                                <Input
-                                                    value={s.name}
-                                                    onChange={(e) => updatePStage(i, 'name', e.target.value)}
-                                                    className="h-7 text-xs flex-1"
-                                                    placeholder="Nome do estágio"
-                                                />
-                                                <button
-                                                    type="button"
-                                                    onClick={() => removePStage(i)}
-                                                    className="p-0.5 text-muted-foreground hover:text-destructive transition-colors flex-shrink-0"
-                                                >
-                                                    <X className="size-3.5" />
-                                                </button>
+                                    <DndContext
+                                        sensors={sensors}
+                                        collisionDetection={closestCenter}
+                                        onDragEnd={handleDragEndStages}
+                                    >
+                                        <SortableContext
+                                            items={pStages.map(s => s.tempId)}
+                                            strategy={verticalListSortingStrategy}
+                                        >
+                                            <div className="flex flex-col gap-1 max-h-52 overflow-y-auto pr-1">
+                                                {pStages.map((s, i) => (
+                                                    <SortableStageRow
+                                                        key={s.tempId}
+                                                        item={s}
+                                                        index={i}
+                                                        onUpdate={updatePStage}
+                                                        onRemove={removePStage}
+                                                    />
+                                                ))}
+                                                {pStages.length === 0 && (
+                                                    <p className="text-xs text-muted-foreground text-center py-2">
+                                                        Nenhum estágio. Adicione pelo menos um.
+                                                    </p>
+                                                )}
                                             </div>
-                                        ))}
-                                        {pStages.length === 0 && (
-                                            <p className="text-xs text-muted-foreground text-center py-2">
-                                                Nenhum estágio. Adicione pelo menos um.
-                                            </p>
-                                        )}
-                                    </div>
+                                        </SortableContext>
+                                    </DndContext>
                                 </div>
                             )}
                         </div>
@@ -905,45 +1097,103 @@ export default function PipelineLayout({ children }: { children: React.ReactNode
 
             {/* ── Dialog: editar pipeline ──────────────────────────────────────── */}
             <Dialog open={!!editPipeline} onOpenChange={(v) => { if (!v) setEditPipeline(null) }}>
-                <DialogContent className="max-w-sm">
+                <DialogContent className="!max-w-2xl">
                     <DialogHeader>
-                        <DialogTitle>Editar pipeline</DialogTitle>
+                        <DialogTitle>Editar pipeline — {editPipeline?.name}</DialogTitle>
                     </DialogHeader>
-                    <div className="flex flex-col gap-3 py-2">
-                        <div className="flex flex-col gap-1.5">
-                            <Label>Nome</Label>
-                            <Input
-                                value={editName}
-                                onChange={(e) => setEditName(e.target.value)}
-                                placeholder="Nome da pipeline"
-                                autoFocus
-                            />
-                        </div>
-                        <div className="flex flex-col gap-1.5">
-                            <Label>Descrição <span className="text-muted-foreground font-normal">(opcional)</span></Label>
-                            <Input
-                                value={editDesc}
-                                onChange={(e) => setEditDesc(e.target.value)}
-                                placeholder="Breve descrição..."
-                            />
-                        </div>
-                        <div className="flex flex-col gap-1.5">
-                            <Label>Cor</Label>
-                            <div className="flex items-center gap-2">
-                                <input
-                                    type="color"
-                                    value={editColor}
-                                    onChange={(e) => setEditColor(e.target.value)}
-                                    className="size-8 rounded cursor-pointer border"
-                                />
-                                <span className="text-sm text-muted-foreground">{editColor}</span>
+
+                    {/* Tabs */}
+                    <div className="flex gap-1 border-b pb-0 -mt-1 mb-1">
+                        {(['info', 'stages'] as const).map(tab => (
+                            <button
+                                key={tab}
+                                type="button"
+                                onClick={() => setEditTab(tab)}
+                                className={cn(
+                                    'px-3 py-1.5 text-sm border-b-2 -mb-px transition-colors',
+                                    editTab === tab
+                                        ? 'border-primary text-foreground font-medium'
+                                        : 'border-transparent text-muted-foreground hover:text-foreground',
+                                )}
+                            >
+                                {tab === 'info' ? 'Informações' : `Estágios (${editStages.length})`}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Tab: Informações */}
+                    {editTab === 'info' && (
+                        <div className="flex flex-col gap-3 py-2">
+                            <div className="flex flex-col gap-1.5">
+                                <Label>Nome</Label>
+                                <Input value={editName} onChange={e => setEditName(e.target.value)} placeholder="Nome da pipeline" autoFocus />
+                            </div>
+                            <div className="flex flex-col gap-1.5">
+                                <Label>Descrição <span className="text-muted-foreground font-normal">(opcional)</span></Label>
+                                <Input value={editDesc} onChange={e => setEditDesc(e.target.value)} placeholder="Breve descrição..." />
+                            </div>
+                            <div className="flex flex-col gap-1.5">
+                                <Label>Cor</Label>
+                                <div className="flex items-center gap-2">
+                                    <input type="color" value={editColor} onChange={e => setEditColor(e.target.value)} className="size-8 rounded cursor-pointer border" />
+                                    <span className="text-sm text-muted-foreground">{editColor}</span>
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    )}
+
+                    {/* Tab: Estágios */}
+                    {editTab === 'stages' && (
+                        <div className="flex flex-col gap-2 py-2">
+                            <div className="flex items-center justify-between">
+                                <p className="text-xs text-muted-foreground">Arraste para reordenar. Excluir estágio com negócios não é permitido.</p>
+                                <button
+                                    type="button"
+                                    onClick={addEditStage}
+                                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 transition-colors shrink-0"
+                                >
+                                    <Plus className="size-3" />
+                                    Adicionar
+                                </button>
+                            </div>
+                            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEndEditStages}>
+                                <SortableContext items={editStages.map(s => s.tempId)} strategy={verticalListSortingStrategy}>
+                                    <div className="flex flex-col gap-1 max-h-72 overflow-y-auto pr-1">
+                                        {editStages.map((s, i) => (
+                                            <SortableStageRow
+                                                key={s.tempId}
+                                                item={s}
+                                                index={i}
+                                                onUpdate={updateEditStage}
+                                                onRemove={removeEditStage}
+                                            />
+                                        ))}
+                                        {editStages.length === 0 && (
+                                            <p className="text-xs text-muted-foreground text-center py-4">
+                                                Nenhum estágio. Clique em "Adicionar".
+                                            </p>
+                                        )}
+                                    </div>
+                                </SortableContext>
+                            </DndContext>
+                        </div>
+                    )}
+
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setEditPipeline(null)}>Cancelar</Button>
-                        <Button onClick={handleSaveEdit} disabled={!editName.trim() || updatePipeline.isPending}>
-                            {updatePipeline.isPending && <Loader2 className="size-3.5 animate-spin mr-1.5" />}
+                        <Button
+                            onClick={handleSaveEdit}
+                            disabled={
+                                !editName.trim() ||
+                                updatePipeline.isPending ||
+                                createStage.isPending ||
+                                updateStage.isPending ||
+                                deleteStage.isPending
+                            }
+                        >
+                            {(updatePipeline.isPending || createStage.isPending || updateStage.isPending || deleteStage.isPending) && (
+                                <Loader2 className="size-3.5 animate-spin mr-1.5" />
+                            )}
                             Salvar
                         </Button>
                     </DialogFooter>

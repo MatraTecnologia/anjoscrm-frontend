@@ -1223,10 +1223,10 @@ function CustomFieldInput({
 
 function AnotacoesTab({ leadId, enterpriseId }: { leadId: string; enterpriseId: string }) {
     const [text, setText] = useState('')
-    const { data: logs = [], isLoading } = useListLeadAuditLogs(leadId, enterpriseId)
+    const { data: logsData, isLoading } = useListLeadAuditLogs(leadId, enterpriseId)
     const addNote = useAddLeadComment(leadId, enterpriseId)
 
-    const notes = logs.filter(l => l.action === 'comment.added')
+    const notes = (logsData?.pages.flatMap(p => p.logs) ?? []).filter(l => l.action === 'comment.added')
 
     function handleSave() {
         if (!text.trim()) return

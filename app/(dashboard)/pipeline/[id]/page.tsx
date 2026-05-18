@@ -1413,7 +1413,7 @@ function KanbanColumn({
             }
             if (filters.status.length > 0) {
                 result = result.filter(d => {
-                    const stageName = (d.stage as { name?: string } | undefined)?.name?.toLowerCase() ?? ''
+                    const stageName = stage.name?.toLowerCase() ?? ''
                     const isGanho = stageName.includes('ganho')
                     const isPerdido = stageName.includes('perdido') || stageName.includes('perder')
                     const dealStatus = isGanho ? 'ganho' : isPerdido ? 'perdido' : 'em_andamento'

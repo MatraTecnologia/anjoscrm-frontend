@@ -23,7 +23,7 @@ import {
     Loader2, Banknote, CalendarDays, Tag as TagIcon,
     MessageCircle, ChevronDown, Trash2, ArrowLeft, UserPlus,
     Pencil, Trophy, XCircle, User, Send, X, Check, WifiOff,
-    Package, Minus, LayoutGrid, Clock, Settings2, Trash,
+    Package, LayoutGrid, Clock, Settings2, Trash,
     AlertCircle, Copy, Link2, ArrowLeftRight, Zap,
 } from 'lucide-react'
 
@@ -56,11 +56,10 @@ import {
 } from '@/services/pipelines'
 import {
     useStageDeals, useCreateDeal, useUpdateDeal, useDeleteDeal,
-    useListDealProducts, useAddDealProduct, useUpdateDealProduct, useRemoveDealProduct,
     type Deal, type DealLead, type StageDealsPage,
 } from '@/services/deals'
-import { useListProducts } from '@/services/products'
-import { useLeads, useCreateLead, useUpdateLead } from '@/services/leads'
+import { useLeads, useCreateLead, useUpdateLead, useLead } from '@/services/leads'
+import { LeadSheet } from '@/components/lead-sheet'
 import { useMembers } from '@/services/enterprises'
 import { useListTags } from '@/services/tags'
 import { useConnections } from '@/services/connections'
@@ -139,22 +138,13 @@ function DealCardBody({
     const updateDeal = useUpdateDeal()
     const deleteDeal = useDeleteDeal()
     const updateLead = useUpdateLead()
-    const { data: members = [] } = useMembers(enterpriseId)
     const color = avatarColor(deal.lead.name)
 
     const [sheetOpen, setSheetOpen] = useState(false)
-    const [editTitle, setEditTitle] = useState('')
-    const [editValue, setEditValue] = useState('')
-    const [memberSearch, setMemberSearch] = useState('')
     const [tagPickerOpen, setTagPickerOpen] = useState(false)
-    const [productSearch, setProductSearch] = useState('')
-    const { data: allTags = [] } = useListTags(enterpriseId)
 
-    const { data: dealProducts = [] } = useListDealProducts(sheetOpen ? deal.id : '')
-    const { data: allProducts = [] } = useListProducts(enterpriseId, productSearch ? { q: productSearch } : undefined)
-    const addDealProduct = useAddDealProduct()
-    const updateDealProduct = useUpdateDealProduct()
-    const removeDealProduct = useRemoveDealProduct()
+    const { data: allTags = [] } = useListTags(enterpriseId)
+    const { data: fullLead = null } = useLead(enterpriseId, deal.leadId, sheetOpen)
 
     const ganhoStage = stages.find(s => s.name.toLowerCase().includes('ganho'))
     const perdidoStage = stages.find(s =>
@@ -166,17 +156,9 @@ function DealCardBody({
         s.id !== perdidoStage?.id,
     )
 
-    const assignee = deal.lead.assignee
     const currentStage = stages.find(s => s.id === deal.stageId)
-    const filteredMembers = members.filter(m =>
-        m.user.name.toLowerCase().includes(memberSearch.toLowerCase()),
-    )
 
     function openSheet() {
-        setEditTitle(deal.title)
-        setEditValue(deal.value != null ? String(deal.value) : '')
-        setMemberSearch('')
-        setProductSearch('')
         setSheetOpen(true)
     }
 
@@ -192,32 +174,6 @@ function DealCardBody({
             { id: deal.id, enterpriseId },
             {
                 onSuccess: () => { setSheetOpen(false); toast.success('Negócio excluído.') },
-                onError: (e) => toast.error(e.message),
-            },
-        )
-    }
-
-    function handleSaveDeal() {
-        if (!editTitle.trim()) return
-        updateDeal.mutate(
-            {
-                id: deal.id,
-                enterpriseId,
-                title: editTitle.trim(),
-                value: editValue ? Number(editValue.replace(',', '.')) : null,
-            },
-            { onError: (e) => toast.error(e.message) },
-        )
-    }
-
-    function handleAssign(userId: string | null) {
-        updateLead.mutate(
-            { id: deal.leadId, enterpriseId, payload: { assigneeId: userId } },
-            {
-                onSuccess: () => {
-                    qc.invalidateQueries({ queryKey: keys.deals.byStage(deal.stageId) })
-                    toast.success(userId ? 'Atendente atribuído!' : 'Atendente removido.')
-                },
                 onError: (e) => toast.error(e.message),
             },
         )
@@ -385,7 +341,7 @@ function DealCardBody({
                                 onPointerDown={(e) => e.stopPropagation()}
                                 onClick={openSheet}
                             >
-                                {assignee ? assignee.name : 'Sem atendente'}
+                                {deal.lead.assignee ? deal.lead.assignee.name : 'Sem atendente'}
                             </button>
                         </div>
                     )}
@@ -476,256 +432,14 @@ function DealCardBody({
                 </div>
             </div>
 
-            {/* ── Dialog: detalhe do negócio ───────────────────────────────────── */}
-            <Dialog open={sheetOpen} onOpenChange={setSheetOpen}>
-                <DialogContent showCloseButton={false} className="!max-w-lg !w-full !max-h-[90vh] !h-[90vh] flex flex-col gap-0 p-0 overflow-hidden">
-                    <DialogHeader className="px-5 py-4 border-b shrink-0">
-                        <div className="flex items-center gap-2.5">
-                            {deal.lead.image ? (
-                                <img src={deal.lead.image} alt={deal.lead.name} className="size-9 rounded-full flex-shrink-0 object-cover" />
-                            ) : (
-                                <div
-                                    className="size-9 rounded-full flex-shrink-0 flex items-center justify-center text-white text-xs font-bold"
-                                    style={{ backgroundColor: color }}
-                                >
-                                    {initials(deal.lead.name)}
-                                </div>
-                            )}
-                            <div className="flex flex-col min-w-0 flex-1">
-                                <DialogTitle className="text-sm font-semibold leading-tight">{deal.lead.name}</DialogTitle>
-                                <p className="text-[11px] text-muted-foreground mt-0.5">
-                                    {currentStage?.name ?? 'Sem etapa'}
-                                </p>
-                            </div>
-                            <button
-                                onClick={() => setSheetOpen(false)}
-                                className="flex size-7 items-center justify-center rounded-lg text-white/30 hover:text-white/70 hover:bg-white/5 transition-colors shrink-0"
-                            >
-                                <X className="size-4" />
-                            </button>
-                        </div>
-                    </DialogHeader>
-
-                    <div className="flex-1 overflow-auto px-5 py-4 flex flex-col gap-5">
-                        {/* Título */}
-                        <div className="flex flex-col gap-1.5">
-                            <Label className="text-xs text-muted-foreground">Título</Label>
-                            <Input
-                                value={editTitle}
-                                onChange={(e) => setEditTitle(e.target.value)}
-                                onBlur={handleSaveDeal}
-                                onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
-                                className="text-sm"
-                            />
-                        </div>
-
-                        {/* Valor */}
-                        <div className="flex flex-col gap-1.5">
-                            <Label className="text-xs text-muted-foreground">Valor</Label>
-                            <div className="relative">
-                                <span className="absolute left-3 top-2.5 text-xs text-muted-foreground">R$</span>
-                                <Input
-                                    className="pl-9 text-sm"
-                                    placeholder="0,00"
-                                    value={editValue}
-                                    onChange={(e) => setEditValue(e.target.value.replace(/[^0-9,]/g, ''))}
-                                    onBlur={handleSaveDeal}
-                                    onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
-                                />
-                            </div>
-                        </div>
-
-                        {/* Etapa */}
-                        <div className="flex flex-col gap-1.5">
-                            <Label className="text-xs text-muted-foreground">Etapa</Label>
-                            <div className="flex flex-wrap gap-1.5">
-                                {stages.map(s => (
-                                    <button
-                                        key={s.id}
-                                        onClick={() => handleMove(s.id)}
-                                        className={cn(
-                                            'flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium border transition-colors',
-                                            deal.stageId === s.id
-                                                ? 'bg-primary text-primary-foreground border-primary'
-                                                : 'border-border hover:bg-muted',
-                                        )}
-                                    >
-                                        <span
-                                            className="size-1.5 rounded-full flex-shrink-0"
-                                            style={{ backgroundColor: s.color ?? '#888' }}
-                                        />
-                                        {s.name}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Atendente */}
-                        <div className="flex flex-col gap-1.5">
-                            <Label className="text-xs text-muted-foreground">Atendente</Label>
-                            <div className="relative mb-1">
-                                <Search className="absolute left-2.5 top-2 size-3.5 text-muted-foreground" />
-                                <input
-                                    className="w-full pl-8 pr-3 py-1.5 text-xs border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-ring"
-                                    placeholder="Pesquisar..."
-                                    value={memberSearch}
-                                    onChange={(e) => setMemberSearch(e.target.value)}
-                                />
-                            </div>
-                            <div className="flex flex-col rounded-md border overflow-hidden max-h-44 overflow-y-auto">
-                                <button
-                                    onClick={() => handleAssign(null)}
-                                    className={cn(
-                                        'flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-muted transition-colors text-left',
-                                        !assignee && 'bg-blue-50 dark:bg-blue-950/30 text-blue-600 font-medium',
-                                    )}
-                                >
-                                    <div className="size-6 rounded-full flex-shrink-0 flex items-center justify-center bg-muted">
-                                        <User className="size-3 text-muted-foreground" />
-                                    </div>
-                                    Sem atendente
-                                    {!assignee && <span className="ml-auto text-blue-500 text-[10px]">✓</span>}
-                                </button>
-
-                                {filteredMembers.map(m => (
-                                    <button
-                                        key={m.id}
-                                        onClick={() => handleAssign(m.user.id)}
-                                        className={cn(
-                                            'flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-muted transition-colors text-left',
-                                            assignee?.id === m.user.id && 'bg-blue-50 dark:bg-blue-950/30 text-blue-600 font-medium',
-                                        )}
-                                    >
-                                        <div
-                                            className="size-6 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[9px] font-bold"
-                                            style={{ backgroundColor: avatarColor(m.user.name) }}
-                                        >
-                                            {initials(m.user.name)}
-                                        </div>
-                                        <span className="truncate">{m.user.name}</span>
-                                        {assignee?.id === m.user.id && <span className="ml-auto text-blue-500 text-[10px]">✓</span>}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Produtos */}
-                        <div className="flex flex-col gap-1.5">
-                            <Label className="text-xs text-muted-foreground">Produtos</Label>
-
-                            {/* Lista de produtos já adicionados */}
-                            {dealProducts.length > 0 && (
-                                <div className="flex flex-col gap-1 mb-1">
-                                    {dealProducts.map(dp => (
-                                        <div key={dp.id} className="flex items-center gap-2 px-2.5 py-1.5 rounded-md border bg-muted/20 text-xs">
-                                            <Package className="size-3 flex-shrink-0 text-muted-foreground" />
-                                            <span className="flex-1 truncate">{dp.product.name}</span>
-                                            <div className="flex items-center gap-0.5">
-                                                <button
-                                                    onClick={() => updateDealProduct.mutate({ dealId: deal.id, productId: dp.productId, quantity: Math.max(1, dp.quantity - 1) })}
-                                                    className="size-5 rounded flex items-center justify-center hover:bg-muted border"
-                                                >
-                                                    <Minus className="size-3" />
-                                                </button>
-                                                <span className="w-6 text-center font-medium">{dp.quantity}</span>
-                                                <button
-                                                    onClick={() => updateDealProduct.mutate({ dealId: deal.id, productId: dp.productId, quantity: dp.quantity + 1 })}
-                                                    className="size-5 rounded flex items-center justify-center hover:bg-muted border"
-                                                >
-                                                    <Plus className="size-3" />
-                                                </button>
-                                            </div>
-                                            <span className="text-muted-foreground text-[11px] min-w-[4.5rem] text-right">
-                                                {formatBRL(dp.unitPrice * dp.quantity)}
-                                            </span>
-                                            <button
-                                                onClick={() => removeDealProduct.mutate({ dealId: deal.id, productId: dp.productId })}
-                                                className="p-0.5 rounded hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-500 text-muted-foreground/40 transition-colors"
-                                            >
-                                                <X className="size-3" />
-                                            </button>
-                                        </div>
-                                    ))}
-                                    <div className="flex justify-end pr-1">
-                                        <span className="text-[11px] text-muted-foreground">
-                                            Total: <strong className="text-foreground">
-                                                {formatBRL(dealProducts.reduce((sum, dp) => sum + dp.unitPrice * dp.quantity, 0))}
-                                            </strong>
-                                        </span>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Busca para adicionar produto */}
-                            <div className="relative">
-                                <Search className="absolute left-2.5 top-2 size-3.5 text-muted-foreground" />
-                                <input
-                                    className="w-full pl-8 pr-3 py-1.5 text-xs border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-ring"
-                                    placeholder="Buscar produto para adicionar..."
-                                    value={productSearch}
-                                    onChange={(e) => setProductSearch(e.target.value)}
-                                />
-                            </div>
-                            {productSearch && (
-                                <div className="flex flex-col rounded-md border overflow-hidden max-h-36 overflow-y-auto">
-                                    {allProducts.length === 0 ? (
-                                        <p className="text-xs text-muted-foreground text-center py-4">Nenhum produto encontrado</p>
-                                    ) : (
-                                        allProducts.map(p => {
-                                            const alreadyAdded = dealProducts.some(dp => dp.productId === p.id)
-                                            return (
-                                                <button
-                                                    key={p.id}
-                                                    disabled={alreadyAdded || addDealProduct.isPending}
-                                                    onClick={() => {
-                                                        if (alreadyAdded) return
-                                                        addDealProduct.mutate(
-                                                            { dealId: deal.id, productId: p.id, quantity: 1 },
-                                                            { onSuccess: () => setProductSearch('') },
-                                                        )
-                                                    }}
-                                                    className={cn(
-                                                        'flex items-center gap-2 px-3 py-2 text-xs hover:bg-muted transition-colors text-left',
-                                                        alreadyAdded && 'opacity-50 cursor-default',
-                                                    )}
-                                                >
-                                                    <Package className="size-3 flex-shrink-0 text-muted-foreground" />
-                                                    <span className="flex-1 truncate">{p.name}</span>
-                                                    <span className="text-muted-foreground flex-shrink-0">{formatBRL(p.price)}</span>
-                                                    {alreadyAdded
-                                                        ? <Check className="size-3 text-blue-500 flex-shrink-0" />
-                                                        : <Plus className="size-3 text-muted-foreground flex-shrink-0" />
-                                                    }
-                                                </button>
-                                            )
-                                        })
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Footer */}
-                    <div className="px-5 py-3 border-t flex items-center justify-between">
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-red-600 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
-                            onClick={handleDelete}
-                            disabled={deleteDeal.isPending}
-                        >
-                            {deleteDeal.isPending
-                                ? <Loader2 className="size-3.5 animate-spin mr-1.5" />
-                                : <Trash2 className="size-3.5 mr-1.5" />
-                            }
-                            Excluir
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => setSheetOpen(false)}>
-                            Fechar
-                        </Button>
-                    </div>
-                </DialogContent>
-            </Dialog>
+            {/* ── LeadSheet completo com deal pré-selecionado ───────────────── */}
+            <LeadSheet
+                lead={fullLead}
+                enterpriseId={enterpriseId}
+                open={sheetOpen}
+                onOpenChange={setSheetOpen}
+                defaultDealId={deal.id}
+            />
         </>
     )
 }

@@ -1988,13 +1988,25 @@ type LeadSheetProps = {
     enterpriseId: string
     open: boolean
     onOpenChange: (v: boolean) => void
-    onEdit: (lead: Lead) => void
+    onEdit?: (lead: Lead) => void
+    defaultDealId?: string
 }
 
-export function LeadSheet({ lead, enterpriseId, open, onOpenChange }: LeadSheetProps) {
+export function LeadSheet({ lead, enterpriseId, open, onOpenChange, defaultDealId }: LeadSheetProps) {
     const [activeTab, setActiveTab] = useState('historico')
     const [selectedDeal, setSelectedDeal] = useState<DealWithPipeline | null>(null)
     const [selectedDealNumber, setSelectedDealNumber] = useState(1)
+
+    // Auto-seleciona o deal quando aberto a partir do pipeline
+    const { data: leadDeals } = useLeadDeals(lead?.id ?? '', enterpriseId)
+    useEffect(() => {
+        if (!defaultDealId || !leadDeals?.length) return
+        const idx = leadDeals.findIndex(d => d.id === defaultDealId)
+        if (idx === -1) return
+        setSelectedDeal(leadDeals[idx])
+        setSelectedDealNumber(idx + 1)
+        setActiveTab('deal-detail')
+    }, [defaultDealId, leadDeals])
 
     function handleSelectDeal(deal: DealWithPipeline, number: number) {
         setSelectedDeal(deal)

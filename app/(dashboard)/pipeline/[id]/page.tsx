@@ -476,10 +476,10 @@ function DealCardBody({
                 </div>
             </div>
 
-            {/* ── Sheet: detalhe do negócio ─────────────────────────────────────── */}
-            <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-                <SheetContent className="w-full max-w-sm flex flex-col gap-0 p-0">
-                    <SheetHeader className="px-5 py-4 border-b">
+            {/* ── Dialog: detalhe do negócio ───────────────────────────────────── */}
+            <Dialog open={sheetOpen} onOpenChange={setSheetOpen}>
+                <DialogContent showCloseButton={false} className="!max-w-lg !w-full !max-h-[90vh] !h-[90vh] flex flex-col gap-0 p-0 overflow-hidden">
+                    <DialogHeader className="px-5 py-4 border-b shrink-0">
                         <div className="flex items-center gap-2.5">
                             {deal.lead.image ? (
                                 <img src={deal.lead.image} alt={deal.lead.name} className="size-9 rounded-full flex-shrink-0 object-cover" />
@@ -491,14 +491,20 @@ function DealCardBody({
                                     {initials(deal.lead.name)}
                                 </div>
                             )}
-                            <div className="flex flex-col min-w-0">
-                                <SheetTitle className="text-sm font-semibold leading-tight">{deal.lead.name}</SheetTitle>
+                            <div className="flex flex-col min-w-0 flex-1">
+                                <DialogTitle className="text-sm font-semibold leading-tight">{deal.lead.name}</DialogTitle>
                                 <p className="text-[11px] text-muted-foreground mt-0.5">
                                     {currentStage?.name ?? 'Sem etapa'}
                                 </p>
                             </div>
+                            <button
+                                onClick={() => setSheetOpen(false)}
+                                className="flex size-7 items-center justify-center rounded-lg text-white/30 hover:text-white/70 hover:bg-white/5 transition-colors shrink-0"
+                            >
+                                <X className="size-4" />
+                            </button>
                         </div>
-                    </SheetHeader>
+                    </DialogHeader>
 
                     <div className="flex-1 overflow-auto px-5 py-4 flex flex-col gap-5">
                         {/* Título */}
@@ -718,8 +724,8 @@ function DealCardBody({
                             Fechar
                         </Button>
                     </div>
-                </SheetContent>
-            </Sheet>
+                </DialogContent>
+            </Dialog>
         </>
     )
 }

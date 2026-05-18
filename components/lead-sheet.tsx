@@ -2030,7 +2030,7 @@ export function LeadSheet({ lead, enterpriseId, open, onOpenChange }: LeadSheetP
         <Dialog open={open} onOpenChange={handleOpenChange}>
             <DialogContent
                 showCloseButton={false}
-                className="max-w-[92vw] w-[92vw] max-h-[90vh] h-[90vh] p-0 flex flex-col gap-0 overflow-hidden"
+                className="!max-w-[92vw] !w-[92vw] !max-h-[90vh] !h-[90vh] p-0 flex flex-col gap-0 overflow-hidden"
             >
                 {lead && (
                     <div className="flex h-full min-h-0">

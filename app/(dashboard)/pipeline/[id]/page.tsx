@@ -109,9 +109,12 @@ type Filters = {
     assigneeId: string | null
     minValue: string
     maxValue: string
+    dateFrom: string
+    dateTo: string
+    status: string[]
 }
 
-const EMPTY_FILTERS: Filters = { tagIds: [], assigneeId: null, minValue: '', maxValue: '' }
+const EMPTY_FILTERS: Filters = { tagIds: [], assigneeId: null, minValue: '', maxValue: '', dateFrom: '', dateTo: '', status: [] }
 
 // ─── Deal Card Body (visual compartilhado) ────────────────────────────────────
 
@@ -122,6 +125,7 @@ function DealCardBody({
     enterpriseId,
     handleProps,
     onWhatsappClick,
+    cardFields = DEFAULT_CARD_FIELDS,
 }: {
     deal: Deal
     index: number
@@ -129,6 +133,7 @@ function DealCardBody({
     enterpriseId: string
     handleProps?: React.HTMLAttributes<HTMLElement>
     onWhatsappClick?: (lead: DealLead) => void
+    cardFields?: Record<string, boolean>
 }) {
     const qc = useQueryClient()
     const updateDeal = useUpdateDeal()
@@ -275,11 +280,11 @@ function DealCardBody({
                             >
                                 {deal.title}
                             </button>
-                            <span className="text-[10px] text-muted-foreground flex-shrink-0">#{index + 1}</span>
+                            {cardFields.index !== false && <span className="text-[10px] text-muted-foreground flex-shrink-0">#{index + 1}</span>}
                         </div>
                         <div className="flex items-center gap-1 mt-0.5">
                             <p className="text-[11px] text-muted-foreground truncate">{deal.lead.name}</p>
-                            {deal.lead.origem?.toLowerCase().includes('meta') && (
+                            {cardFields.origem !== false && deal.lead.origem?.toLowerCase().includes('meta') && (
                                 <span className="shrink-0 inline-flex items-center rounded px-1 py-0 text-[9px] font-semibold bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400 leading-tight">
                                     META
                                 </span>
@@ -354,34 +359,40 @@ function DealCardBody({
 
                 {/* Infos */}
                 <div className="px-3 pb-2 space-y-0.5">
-                    <div className="flex items-center gap-1.5 text-xs">
-                        <Banknote className="size-3 flex-shrink-0 text-muted-foreground" />
-                        <button
-                            className="text-blue-600 font-medium hover:underline"
-                            onPointerDown={(e) => e.stopPropagation()}
-                            onClick={openSheet}
-                        >
-                            {formatBRL(deal.value)}
-                        </button>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                        <CalendarDays className="size-3 flex-shrink-0" />
-                        <span>{format(new Date(deal.createdAt), 'dd/MM/yyyy', { locale: ptBR })}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-xs">
-                        <User className="size-3 flex-shrink-0 text-muted-foreground" />
-                        <button
-                            className="text-blue-600 font-medium hover:underline truncate"
-                            onPointerDown={(e) => e.stopPropagation()}
-                            onClick={openSheet}
-                        >
-                            {assignee ? assignee.name : 'Sem atendente'}
-                        </button>
-                    </div>
+                    {cardFields.value !== false && (
+                        <div className="flex items-center gap-1.5 text-xs">
+                            <Banknote className="size-3 flex-shrink-0 text-muted-foreground" />
+                            <button
+                                className="text-blue-600 font-medium hover:underline"
+                                onPointerDown={(e) => e.stopPropagation()}
+                                onClick={openSheet}
+                            >
+                                {formatBRL(deal.value)}
+                            </button>
+                        </div>
+                    )}
+                    {cardFields.createdAt !== false && (
+                        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                            <CalendarDays className="size-3 flex-shrink-0" />
+                            <span>{format(new Date(deal.createdAt), 'dd/MM/yyyy', { locale: ptBR })}</span>
+                        </div>
+                    )}
+                    {cardFields.assignee !== false && (
+                        <div className="flex items-center gap-1.5 text-xs">
+                            <User className="size-3 flex-shrink-0 text-muted-foreground" />
+                            <button
+                                className="text-blue-600 font-medium hover:underline truncate"
+                                onPointerDown={(e) => e.stopPropagation()}
+                                onClick={openSheet}
+                            >
+                                {assignee ? assignee.name : 'Sem atendente'}
+                            </button>
+                        </div>
+                    )}
                 </div>
 
                 {/* Tags */}
-                {deal.lead.tags.length > 0 && (
+                {cardFields.tags !== false && deal.lead.tags.length > 0 && (
                     <div className="px-3 pb-2 flex flex-wrap gap-1">
                         {deal.lead.tags.map((tag) => (
                             <span
@@ -721,12 +732,14 @@ function DealCard({
     stages,
     enterpriseId,
     onWhatsappClick,
+    cardFields,
 }: {
     deal: Deal
     index: number
     stages: PipelineStage[]
     enterpriseId: string
     onWhatsappClick?: (lead: DealLead) => void
+    cardFields?: Record<string, boolean>
 }) {
     const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
         id: deal.id,
@@ -746,6 +759,7 @@ function DealCard({
                 enterpriseId={enterpriseId}
                 handleProps={listeners}
                 onWhatsappClick={onWhatsappClick}
+                cardFields={cardFields}
             />
         </div>
     )
@@ -1315,6 +1329,7 @@ function KanbanColumn({
     filters,
     isBilateral,
     onWhatsappClick,
+    cardFields,
 }: {
     stage: PipelineStage
     stages: PipelineStage[]
@@ -1325,6 +1340,7 @@ function KanbanColumn({
     filters?: Filters
     isBilateral?: boolean
     onWhatsappClick?: (lead: DealLead) => void
+    cardFields?: Record<string, boolean>
 }) {
     const scrollRef = useRef<HTMLDivElement>(null)
     const { setNodeRef: setDropRef, isOver } = useDroppable({ id: stage.id })
@@ -1388,6 +1404,21 @@ function KanbanColumn({
             }
             if (filters.maxValue) {
                 result = result.filter(d => Number(d.value ?? 0) <= Number(filters.maxValue.replace(',', '.')))
+            }
+            if (filters.dateFrom) {
+                result = result.filter(d => new Date(d.createdAt) >= new Date(filters.dateFrom))
+            }
+            if (filters.dateTo) {
+                result = result.filter(d => new Date(d.createdAt) <= new Date(filters.dateTo + 'T23:59:59'))
+            }
+            if (filters.status.length > 0) {
+                result = result.filter(d => {
+                    const stageName = (d.stage as { name?: string } | undefined)?.name?.toLowerCase() ?? ''
+                    const isGanho = stageName.includes('ganho')
+                    const isPerdido = stageName.includes('perdido') || stageName.includes('perder')
+                    const dealStatus = isGanho ? 'ganho' : isPerdido ? 'perdido' : 'em_andamento'
+                    return filters.status.includes(dealStatus)
+                })
             }
         }
         return result
@@ -1594,6 +1625,7 @@ function KanbanColumn({
                                                 stages={stages}
                                                 enterpriseId={enterpriseId}
                                                 onWhatsappClick={onWhatsappClick}
+                                                cardFields={cardFields}
                                             />
                                         )}
                                     </div>
@@ -2103,6 +2135,77 @@ function FollowUpView({
     )
 }
 
+// ─── Card Fields Config ───────────────────────────────────────────────────────
+
+const CARD_FIELD_LABELS: Record<string, string> = {
+    value: 'Valor',
+    createdAt: 'Data de criação',
+    assignee: 'Atendente',
+    tags: 'Tags',
+    origem: 'Origem (Meta)',
+    index: 'Índice (#)',
+}
+
+const DEFAULT_CARD_FIELDS: Record<string, boolean> = {
+    value: true,
+    createdAt: true,
+    assignee: true,
+    tags: true,
+    origem: true,
+    index: true,
+}
+
+function useCardFields(pipelineId: string) {
+    const key = `pipeline-card-fields-${pipelineId}`
+    const [fields, setFields] = useState<Record<string, boolean>>(() => {
+        if (typeof window === 'undefined') return DEFAULT_CARD_FIELDS
+        try { return JSON.parse(localStorage.getItem(key) ?? 'null') ?? DEFAULT_CARD_FIELDS }
+        catch { return DEFAULT_CARD_FIELDS }
+    })
+    function toggle(field: string) {
+        setFields(prev => {
+            const next = { ...prev, [field]: !prev[field] }
+            localStorage.setItem(key, JSON.stringify(next))
+            return next
+        })
+    }
+    return { fields, toggle }
+}
+
+function CardFieldsConfigSheet({
+    open,
+    onOpenChange,
+    fields,
+    onToggle,
+}: {
+    open: boolean
+    onOpenChange: (v: boolean) => void
+    fields: Record<string, boolean>
+    onToggle: (field: string) => void
+}) {
+    return (
+        <Sheet open={open} onOpenChange={onOpenChange}>
+            <SheetContent className="w-72 flex flex-col gap-0 p-0" side="right">
+                <SheetHeader className="px-5 py-4 border-b">
+                    <SheetTitle className="text-sm">Campos do cartão</SheetTitle>
+                </SheetHeader>
+                <div className="flex-1 overflow-y-auto p-5 space-y-1">
+                    <p className="text-xs text-muted-foreground mb-3">Escolha quais campos aparecem na frente de cada cartão do pipeline.</p>
+                    {Object.entries(CARD_FIELD_LABELS).map(([key, label]) => (
+                        <div key={key} className="flex items-center justify-between py-2 px-1">
+                            <span className="text-sm">{label}</span>
+                            <Switch
+                                checked={fields[key] ?? true}
+                                onCheckedChange={() => onToggle(key)}
+                            />
+                        </div>
+                    ))}
+                </div>
+            </SheetContent>
+        </Sheet>
+    )
+}
+
 // ─── Filter Sheet ─────────────────────────────────────────────────────────────
 
 function FilterSheet({
@@ -2141,6 +2244,31 @@ function FilterSheet({
                 </SheetHeader>
 
                 <div className="flex-1 overflow-y-auto p-5 space-y-5">
+                    {/* Data de criação */}
+                    <div className="space-y-2">
+                        <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Data de criação</Label>
+                        <div className="flex gap-3">
+                            <div className="flex-1 flex flex-col gap-1">
+                                <Label className="text-[10px] text-muted-foreground">De</Label>
+                                <Input
+                                    type="date"
+                                    className="h-8 text-xs"
+                                    value={local.dateFrom}
+                                    onChange={e => setLocal(p => ({ ...p, dateFrom: e.target.value }))}
+                                />
+                            </div>
+                            <div className="flex-1 flex flex-col gap-1">
+                                <Label className="text-[10px] text-muted-foreground">Até</Label>
+                                <Input
+                                    type="date"
+                                    className="h-8 text-xs"
+                                    value={local.dateTo}
+                                    onChange={e => setLocal(p => ({ ...p, dateTo: e.target.value }))}
+                                />
+                            </div>
+                        </div>
+                    </div>
+
                     {/* Tags */}
                     <div className="space-y-2">
                         <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tags</Label>
@@ -2241,6 +2369,38 @@ function FilterSheet({
                                     />
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                    {/* Status */}
+                    <div className="space-y-2">
+                        <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Status</Label>
+                        <div className="flex flex-col gap-1">
+                            {([
+                                { key: 'em_andamento', label: 'Em andamento' },
+                                { key: 'ganho', label: 'Ganho' },
+                                { key: 'perdido', label: 'Perdido' },
+                            ] as const).map(({ key, label }) => {
+                                const selected = local.status.includes(key)
+                                return (
+                                    <button
+                                        key={key}
+                                        onClick={() => setLocal(p => ({
+                                            ...p,
+                                            status: selected ? p.status.filter(s => s !== key) : [...p.status, key],
+                                        }))}
+                                        className={cn(
+                                            'flex items-center gap-2 px-3 py-2 rounded-md text-xs transition-colors text-left border',
+                                            selected
+                                                ? 'bg-primary/10 border-primary/30 text-primary font-medium'
+                                                : 'border-transparent hover:bg-muted text-muted-foreground',
+                                        )}
+                                    >
+                                        {selected && <Check className="size-3 flex-shrink-0" />}
+                                        {!selected && <div className="size-3 flex-shrink-0" />}
+                                        {label}
+                                    </button>
+                                )
+                            })}
                         </div>
                     </div>
                 </div>
@@ -2350,6 +2510,8 @@ export default function PipelinePage() {
     const [search, setSearch] = useState('')
     const [filterOpen, setFilterOpen] = useState(false)
     const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS)
+    const [cardFieldsConfigOpen, setCardFieldsConfigOpen] = useState(false)
+    const { fields: cardFields, toggle: toggleCardField } = useCardFields(id ?? '')
     const [addStageActive, setAddStageActive] = useState(false)
     const [addStageName, setAddStageName] = useState('')
     const [addStageColor, setAddStageColor] = useState('#6366f1')
@@ -2358,7 +2520,10 @@ export default function PipelinePage() {
         (filters.tagIds.length > 0 ? 1 : 0) +
         (filters.assigneeId ? 1 : 0) +
         (filters.minValue ? 1 : 0) +
-        (filters.maxValue ? 1 : 0)
+        (filters.maxValue ? 1 : 0) +
+        (filters.dateFrom ? 1 : 0) +
+        (filters.dateTo ? 1 : 0) +
+        (filters.status.length > 0 ? 1 : 0)
 
     function handleWhatsappClick(lead: DealLead) {
         setChatLead(prev => prev?.id === lead.id ? null : lead)
@@ -2604,6 +2769,14 @@ export default function PipelinePage() {
                             </span>
                         )}
                     </button>
+                    <button
+                        onClick={() => setCardFieldsConfigOpen(true)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs border rounded-md hover:bg-muted transition-colors"
+                        title="Personalizar campos do cartão"
+                    >
+                        <Settings2 className="size-3.5" />
+                        Cartão
+                    </button>
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <button className="flex items-center gap-1.5 px-3 py-1.5 text-xs border rounded-md hover:bg-muted transition-colors">
@@ -2678,6 +2851,7 @@ export default function PipelinePage() {
                                 filters={filters}
                                 isBilateral={pipeline.isBilateral}
                                 onWhatsappClick={handleWhatsappClick}
+                                cardFields={cardFields}
                             />
                         ))}
 
@@ -2769,6 +2943,13 @@ export default function PipelinePage() {
                 filters={filters}
                 onApply={setFilters}
                 enterpriseId={enterpriseId}
+            />
+
+            <CardFieldsConfigSheet
+                open={cardFieldsConfigOpen}
+                onOpenChange={setCardFieldsConfigOpen}
+                fields={cardFields}
+                onToggle={toggleCardField}
             />
 
             {/* Meta Integration Sheet */}

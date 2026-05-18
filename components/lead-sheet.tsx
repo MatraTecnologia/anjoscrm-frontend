@@ -21,7 +21,6 @@ import { cn } from '@/lib/utils'
 import { PhoneInput } from '@/components/phone-input'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -1220,6 +1219,135 @@ function CustomFieldInput({
     )
 }
 
+// ─── Anotações tab ───────────────────────────────────────────────────────────
+
+function AnotacoesTab({ leadId, enterpriseId }: { leadId: string; enterpriseId: string }) {
+    const [text, setText] = useState('')
+    const { data: logs = [], isLoading } = useListLeadAuditLogs(leadId, enterpriseId)
+    const addNote = useAddLeadComment(leadId, enterpriseId)
+
+    const notes = logs.filter(l => l.action === 'comment.added')
+
+    function handleSave() {
+        if (!text.trim()) return
+        addNote.mutate(text.trim(), {
+            onSuccess: () => setText(''),
+            onError: (e) => toast.error(e.message),
+        })
+    }
+
+    return (
+        <div className="flex flex-col h-full p-4 gap-4">
+            <div className="flex flex-col gap-2">
+                <Textarea
+                    placeholder="Escreva uma anotação sobre este lead..."
+                    className="resize-none text-sm min-h-24 bg-muted/20"
+                    value={text}
+                    onChange={e => setText(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleSave() }}
+                />
+                <Button
+                    size="sm"
+                    className="self-end h-7 text-xs gap-1.5"
+                    disabled={!text.trim() || addNote.isPending}
+                    onClick={handleSave}
+                >
+                    {addNote.isPending ? <Loader2 className="size-3 animate-spin" /> : <Send className="size-3" />}
+                    Salvar anotação
+                </Button>
+            </div>
+
+            {isLoading ? (
+                <div className="flex items-center justify-center py-8">
+                    <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                </div>
+            ) : notes.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 text-muted-foreground gap-2">
+                    <MessageSquarePlus className="size-8 opacity-20" />
+                    <p className="text-sm">Nenhuma anotação ainda.</p>
+                </div>
+            ) : (
+                <div className="flex flex-col gap-3 overflow-y-auto">
+                    {notes.map(log => (
+                        <div key={log.id} className="flex flex-col gap-1 rounded-lg border bg-muted/20 px-3 py-2.5">
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs font-medium">{log.user?.name ?? 'Usuário'}</span>
+                                <span className="text-[11px] text-muted-foreground">
+                                    {format(new Date(log.createdAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                                </span>
+                            </div>
+                            <p className="text-sm whitespace-pre-wrap">{(log.metadata as { comment?: string })?.comment ?? ''}</p>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    )
+}
+
+// ─── Agendamentos tab ─────────────────────────────────────────────────────────
+
+function AgendamentosTab({ leadId, enterpriseId }: { leadId: string; enterpriseId: string }) {
+    const { data: activities = [], isLoading } = useLeadActivities(leadId, enterpriseId)
+    const pending = activities
+        .filter(a => !a.completed)
+        .sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime())
+
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center py-14">
+                <Loader2 className="size-4 animate-spin text-muted-foreground" />
+            </div>
+        )
+    }
+
+    if (pending.length === 0) {
+        return (
+            <div className="flex flex-col items-center justify-center py-14 text-muted-foreground gap-2">
+                <Calendar className="size-8 opacity-20" />
+                <p className="text-sm font-medium">Nenhum agendamento pendente</p>
+                <p className="text-xs opacity-70">Crie atividades na aba Atividades.</p>
+            </div>
+        )
+    }
+
+    return (
+        <div className="flex flex-col gap-2 p-4 overflow-y-auto">
+            {pending.map(activity => (
+                <div key={activity.id} className="flex items-start gap-3 rounded-lg border bg-muted/10 px-3 py-2.5">
+                    <div className="mt-0.5 shrink-0">
+                        {activity.completed
+                            ? <CheckCircle2 className="size-4 text-green-500" />
+                            : <Circle className="size-4 text-muted-foreground" />
+                        }
+                    </div>
+                    <div className="flex flex-col gap-0.5 min-w-0">
+                        <span className="text-sm font-medium truncate">{activity.title}</span>
+                        {activity.description && (
+                            <span className="text-xs text-muted-foreground line-clamp-2">{activity.description}</span>
+                        )}
+                        <div className="flex items-center gap-1.5 mt-1">
+                            <Clock className="size-3 text-muted-foreground shrink-0" />
+                            <span className="text-[11px] text-muted-foreground">
+                                {format(new Date(activity.startAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                            </span>
+                            {activity.activityType && (
+                                <Badge
+                                    variant="outline"
+                                    className="text-[10px] px-1.5 py-0 h-4 ml-1"
+                                    style={{ borderColor: activity.activityType.color ?? undefined, color: activity.activityType.color ?? undefined }}
+                                >
+                                    {activity.activityType.name}
+                                </Badge>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            ))}
+        </div>
+    )
+}
+
 // ─── Left panel ───────────────────────────────────────────────────────────────
 
 type ProfileSubTab = 'perfil' | 'endereco' | 'campos'
@@ -1240,7 +1368,7 @@ function LeadProfile({ lead, enterpriseId }: { lead: Lead; enterpriseId: string 
     const [metricsOpen, setMetricsOpen] = useState(true)
     const [notesOpen, setNotesOpen] = useState(false)
     const [noteText, setNoteText] = useState('')
-    const [profileTab, setProfileTab] = useState<ProfileSubTab>('perfil')
+    const [profileTab, setProfileTab] = useState<ProfileSubTab>('campos')
 
     // Crop modal
     const [cropSrc, setCropSrc] = useState<string | null>(null)
@@ -1891,18 +2019,18 @@ export function LeadSheet({ lead, enterpriseId, open, onOpenChange }: LeadSheetP
     const mainTabs = [
         { value: 'historico', label: 'Histórico' },
         { value: 'atividades', label: 'Atividades' },
+        { value: 'anotacoes', label: 'Anotações' },
+        { value: 'agendamentos', label: 'Agendamentos' },
         { value: 'negocios', label: 'Negócios' },
         { value: 'arquivos', label: 'Arquivos' },
         { value: 'atendimentos', label: 'Atendimentos' },
     ]
 
     return (
-        <Sheet open={open} onOpenChange={handleOpenChange}>
-            <SheetContent
-                side="right"
+        <Dialog open={open} onOpenChange={handleOpenChange}>
+            <DialogContent
                 showCloseButton={false}
-                className="p-0 flex flex-col gap-0"
-                style={{ width: '85vw', maxWidth: '85vw' }}
+                className="max-w-[92vw] w-[92vw] max-h-[90vh] h-[90vh] p-0 flex flex-col gap-0 overflow-hidden"
             >
                 {lead && (
                     <div className="flex h-full min-h-0">
@@ -1951,6 +2079,12 @@ export function LeadSheet({ lead, enterpriseId, open, onOpenChange }: LeadSheetP
                                     <TabsContent value="atividades" className="mt-0 h-full">
                                         <AtividadesTab leadId={lead.id} enterpriseId={enterpriseId} />
                                     </TabsContent>
+                                    <TabsContent value="anotacoes" className="mt-0 h-full">
+                                        <AnotacoesTab leadId={lead.id} enterpriseId={enterpriseId} />
+                                    </TabsContent>
+                                    <TabsContent value="agendamentos" className="mt-0 h-full">
+                                        <AgendamentosTab leadId={lead.id} enterpriseId={enterpriseId} />
+                                    </TabsContent>
                                     <TabsContent value="negocios" className="mt-0 h-full">
                                         <NegociosTab
                                             leadId={lead.id}
@@ -1974,7 +2108,7 @@ export function LeadSheet({ lead, enterpriseId, open, onOpenChange }: LeadSheetP
                         </div>
                     </div>
                 )}
-            </SheetContent>
-        </Sheet>
+            </DialogContent>
+        </Dialog>
     )
 }

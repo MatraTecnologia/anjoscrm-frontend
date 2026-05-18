@@ -172,12 +172,8 @@ export function useStageDeals(
 }
 
 export function useCreateDeal() {
-    const qc = useQueryClient()
     return useMutation({
         mutationFn: createDealFn,
-        onSuccess: (_data, { stageId }) => {
-            qc.invalidateQueries({ queryKey: keys.deals.byStage(stageId) })
-        },
     })
 }
 

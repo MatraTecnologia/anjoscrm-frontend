@@ -16,12 +16,13 @@ api.interceptors.response.use(
         const status: number | undefined = error?.response?.status
         const url: string = error?.config?.url ?? ''
 
-        // 401 fora dos endpoints de autenticação → sessão expirada, redireciona para login
+        // 401 fora dos endpoints de autenticação → sessão expirada, redireciona para login após breve delay
         if (status === 401 && !url.includes('/auth/')) {
             if (typeof window !== 'undefined') {
                 const { pathname } = window.location
                 if (pathname !== '/login' && pathname !== '/register') {
-                    window.location.replace('/login')
+                    // Delay para permitir que o toast de erro seja exibido antes do redirect
+                    setTimeout(() => window.location.replace('/login'), 1500)
                 }
             }
         }

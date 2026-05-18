@@ -17,39 +17,27 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp
 type LoginMode = 'password' | 'magic' | 'otp'
 type OTPStep = 'email' | 'code'
 
-// ── Estilos base dark ────────────────────────────────────────────────────────
-
-const inputBase =
-    'login-input w-full rounded-lg px-4 py-3 text-sm outline-none transition-all'
-const inputStyle: React.CSSProperties = {
-    background: '#0d1730',
-    border: '1px solid rgba(255,255,255,0.1)',
-    color: 'rgba(255,255,255,0.88)',
+const field: React.CSSProperties = {
+    background: 'rgba(8, 18, 48, 0.55)',
+    border: '1px solid rgba(255,255,255,0.12)',
+    color: 'rgba(255,255,255,0.9)',
     caretColor: 'white',
+    backdropFilter: 'blur(8px)',
 }
-const inputFocusStyle = {
-    '--tw-ring-color': 'rgba(37,99,235,0.4)',
-}
-const inputFocusClass = 'focus:outline-none focus:ring-2 focus:ring-blue-500/40'
-
-// ── Componente ───────────────────────────────────────────────────────────────
 
 export function LoginForm({ className }: { className?: string }) {
     const router = useRouter()
 
     const [mode, setMode] = useState<LoginMode>('password')
     const [email, setEmail] = useState('')
-
     const [password, setPassword] = useState('')
     const [showPassword, setShowPassword] = useState(false)
     const [rememberMe, setRememberMe] = useState(false)
     const [emailNotVerified, setEmailNotVerified] = useState(false)
     const [resendCooldown, setResendCooldown] = useState(0)
-
     const [otpStep, setOtpStep] = useState<OTPStep>('email')
     const [otp, setOtp] = useState('')
     const [otpCooldown, setOtpCooldown] = useState(0)
-
     const [magicSent, setMagicSent] = useState(false)
     const [magicCooldown, setMagicCooldown] = useState(0)
 
@@ -61,19 +49,19 @@ export function LoginForm({ className }: { className?: string }) {
 
     useEffect(() => {
         if (resendCooldown <= 0) return
-        const t = setTimeout(() => setResendCooldown((c) => c - 1), 1000)
+        const t = setTimeout(() => setResendCooldown(c => c - 1), 1000)
         return () => clearTimeout(t)
     }, [resendCooldown])
 
     useEffect(() => {
         if (otpCooldown <= 0) return
-        const t = setTimeout(() => setOtpCooldown((c) => c - 1), 1000)
+        const t = setTimeout(() => setOtpCooldown(c => c - 1), 1000)
         return () => clearTimeout(t)
     }, [otpCooldown])
 
     useEffect(() => {
         if (magicCooldown <= 0) return
-        const t = setTimeout(() => setMagicCooldown((c) => c - 1), 1000)
+        const t = setTimeout(() => setMagicCooldown(c => c - 1), 1000)
         return () => clearTimeout(t)
     }, [magicCooldown])
 
@@ -89,10 +77,7 @@ export function LoginForm({ className }: { className?: string }) {
         e.preventDefault()
         setEmailNotVerified(false)
         signIn({ email, password, rememberMe }, {
-            onSuccess: () => {
-                toast.success('Login realizado com sucesso!')
-                router.push('/verify')
-            },
+            onSuccess: () => { toast.success('Login realizado com sucesso!'); router.push('/verify') },
             onError: (error: Error) => {
                 const msg = error.message.toLowerCase()
                 if (msg.includes('not verified') || msg.includes('verificad') || msg.includes('email_not_verified')) {
@@ -107,7 +92,7 @@ export function LoginForm({ className }: { className?: string }) {
     function handleSendMagic(e: React.FormEvent) {
         e.preventDefault()
         sendMagic(email, {
-            onSuccess: () => { setMagicSent(true); setMagicCooldown(60); toast.success('Link de acesso enviado!') },
+            onSuccess: () => { setMagicSent(true); setMagicCooldown(60); toast.success('Link enviado!') },
             onError: (error: Error) => toast.error(error.message),
         })
     }
@@ -123,17 +108,23 @@ export function LoginForm({ className }: { className?: string }) {
     function handleVerifyOTP(e: React.FormEvent) {
         e.preventDefault()
         verifyOTP({ email, otp }, {
-            onSuccess: () => { toast.success('Login realizado com sucesso!'); router.push('/verify') },
+            onSuccess: () => { toast.success('Login realizado!'); router.push('/verify') },
             onError: (error: Error) => { toast.error(error.message); setOtp('') },
         })
     }
 
-    return (
-        <div className={cn('flex flex-col gap-5', className)}>
+    const tabs = [
+        { id: 'password' as LoginMode, label: 'Senha', icon: <KeyRound className="size-3.5" /> },
+        { id: 'magic' as LoginMode, label: 'Link mágico', icon: <Wand2 className="size-3.5" /> },
+        { id: 'otp' as LoginMode, label: 'Código', icon: <Mail className="size-3.5" /> },
+    ]
 
-            {/* Header */}
-            <div className="flex flex-col gap-1 text-center">
-                <h1 className="text-2xl font-semibold text-white tracking-tight">
+    return (
+        <div className={cn('flex flex-col', className)} style={{ gap: 28 }}>
+
+            {/* Cabeçalho */}
+            <div className="flex flex-col gap-2 text-center">
+                <h1 className="text-2xl font-bold text-white tracking-tight">
                     Bem-vindo de volta! 👋
                 </h1>
                 <p className="text-sm" style={{ color: 'rgba(255,255,255,0.45)' }}>
@@ -141,122 +132,109 @@ export function LoginForm({ className }: { className?: string }) {
                 </p>
             </div>
 
-            {/* Mode tabs */}
-            <div
-                className="flex rounded-lg p-1 gap-1"
-                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}
-            >
-                {([
-                    { id: 'password', label: 'Senha', icon: <KeyRound className="size-3" /> },
-                    { id: 'magic', label: 'Link mágico', icon: <Wand2 className="size-3" /> },
-                    { id: 'otp', label: 'Código', icon: <Mail className="size-3" /> },
-                ] as { id: LoginMode; label: string; icon: React.ReactNode }[]).map((tab) => (
+            {/* Tabs — minimalistas com indicador de linha */}
+            <div className="flex items-center justify-center gap-1" style={{
+                borderBottom: '1px solid rgba(255,255,255,0.08)',
+                paddingBottom: 0,
+            }}>
+                {tabs.map(tab => (
                     <button
                         key={tab.id}
                         type="button"
                         onClick={() => switchMode(tab.id)}
-                        className={cn(
-                            'flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-all',
-                            mode === tab.id
-                                ? 'text-white'
-                                : 'text-white/40 hover:text-white/70',
-                        )}
-                        style={mode === tab.id ? {
-                            background: 'rgba(37,99,235,0.35)',
-                            border: '1px solid rgba(37,99,235,0.4)',
-                        } : {}}
+                        className="relative flex items-center gap-1.5 px-4 pb-3 text-xs font-medium transition-all"
+                        style={{
+                            color: mode === tab.id ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.35)',
+                        }}
                     >
                         {tab.icon}
                         {tab.label}
+                        {/* Indicador ativo */}
+                        {mode === tab.id && (
+                            <span
+                                className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full"
+                                style={{ background: 'linear-gradient(90deg, #3b82f6, #60a5fa)' }}
+                            />
+                        )}
                     </button>
                 ))}
             </div>
 
             {/* ── SENHA ─────────────────────────────────────────────────────── */}
             {mode === 'password' && (
-                <form onSubmit={handlePasswordSubmit} className="flex flex-col gap-4">
+                <form onSubmit={handlePasswordSubmit} className="flex flex-col" style={{ gap: 20 }}>
+
                     {/* E-mail */}
-                    <div className="flex flex-col gap-1.5">
-                        <label className="text-sm font-medium text-white/70">E-mail</label>
+                    <div className="flex flex-col gap-2">
+                        <label className="text-sm font-medium" style={{ color: 'rgba(255,255,255,0.65)' }}>
+                            E-mail
+                        </label>
                         <div className="relative">
-                            <Mail
-                                className="absolute left-3 top-1/2 -translate-y-1/2 size-4"
-                                style={{ color: 'rgba(255,255,255,0.3)' }}
-                            />
+                            <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4" style={{ color: 'rgba(255,255,255,0.3)' }} />
                             <input
                                 type="email"
                                 placeholder="seu@email.com"
                                 autoComplete="email"
                                 required
                                 value={email}
-                                onChange={(e) => setEmail(e.target.value)}
+                                onChange={e => setEmail(e.target.value)}
                                 disabled={signingIn}
-                                className={cn(inputBase, inputFocusClass, 'pl-10')}
-                                style={inputStyle}
+                                className="login-input w-full rounded-xl py-3.5 pl-10 pr-4 text-sm outline-none transition-all"
+                                style={field}
                             />
                         </div>
                     </div>
 
                     {/* Senha */}
-                    <div className="flex flex-col gap-1.5">
-                        <label className="text-sm font-medium text-white/70">Senha</label>
+                    <div className="flex flex-col gap-2">
+                        <label className="text-sm font-medium" style={{ color: 'rgba(255,255,255,0.65)' }}>
+                            Senha
+                        </label>
                         <div className="relative">
-                            <Lock
-                                className="absolute left-3 top-1/2 -translate-y-1/2 size-4"
-                                style={{ color: 'rgba(255,255,255,0.3)' }}
-                            />
+                            <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4" style={{ color: 'rgba(255,255,255,0.3)' }} />
                             <input
                                 type={showPassword ? 'text' : 'password'}
                                 placeholder="••••••••"
                                 autoComplete="current-password"
                                 required
                                 value={password}
-                                onChange={(e) => setPassword(e.target.value)}
+                                onChange={e => setPassword(e.target.value)}
                                 disabled={signingIn}
-                                className={cn(inputBase, inputFocusClass, 'pl-10 pr-10')}
-                                style={inputStyle}
+                                className="login-input w-full rounded-xl py-3.5 pl-10 pr-11 text-sm outline-none transition-all"
+                                style={field}
                             />
                             <button
                                 type="button"
-                                onClick={() => setShowPassword((v) => !v)}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors"
+                                onClick={() => setShowPassword(v => !v)}
+                                className="absolute right-3.5 top-1/2 -translate-y-1/2 transition-colors"
                                 style={{ color: 'rgba(255,255,255,0.3)' }}
                                 tabIndex={-1}
                             >
-                                {showPassword
-                                    ? <EyeOff className="size-4" />
-                                    : <Eye className="size-4" />
-                                }
+                                {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                             </button>
                         </div>
                     </div>
 
-                    {/* Lembrar + esqueci */}
+                    {/* Lembrar + Esqueci */}
                     <div className="flex items-center justify-between">
-                        <label className="flex items-center gap-2 cursor-pointer group">
+                        <label className="flex items-center gap-2.5 cursor-pointer">
                             <div
-                                className="relative flex items-center justify-center rounded size-4 cursor-pointer transition-colors"
+                                className="flex items-center justify-center rounded size-[18px] flex-shrink-0 cursor-pointer transition-all"
                                 style={{
                                     background: rememberMe ? '#2563eb' : 'rgba(255,255,255,0.06)',
-                                    border: rememberMe ? '1px solid #2563eb' : '1px solid rgba(255,255,255,0.15)',
+                                    border: rememberMe ? '1.5px solid #3b82f6' : '1.5px solid rgba(255,255,255,0.18)',
                                 }}
-                                onClick={() => setRememberMe((v) => !v)}
+                                onClick={() => setRememberMe(v => !v)}
                             >
                                 {rememberMe && (
                                     <svg viewBox="0 0 10 8" className="size-2.5" fill="none">
-                                        <path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                                        <path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                                     </svg>
                                 )}
                             </div>
-                            <span className="text-sm" style={{ color: 'rgba(255,255,255,0.55)' }}>
-                                Lembrar de mim
-                            </span>
+                            <span className="text-sm" style={{ color: 'rgba(255,255,255,0.55)' }}>Lembrar de mim</span>
                         </label>
-                        <a
-                            href="/forgot-password"
-                            className="text-sm transition-colors"
-                            style={{ color: '#60a5fa' }}
-                        >
+                        <a href="/forgot-password" className="text-sm font-medium transition-colors" style={{ color: '#60a5fa' }}>
                             Esqueci minha senha
                         </a>
                     </div>
@@ -265,10 +243,10 @@ export function LoginForm({ className }: { className?: string }) {
                     <button
                         type="submit"
                         disabled={signingIn}
-                        className="flex items-center justify-center gap-2 w-full rounded-lg py-3 text-sm font-semibold text-white transition-all disabled:opacity-60"
+                        className="flex items-center justify-center gap-2 w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-all disabled:opacity-60 mt-1"
                         style={{
-                            background: signingIn ? '#1d4ed8' : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
-                            boxShadow: '0 4px 20px rgba(37,99,235,0.4)',
+                            background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                            boxShadow: '0 4px 24px rgba(37,99,235,0.45)',
                         }}
                     >
                         {signingIn
@@ -277,18 +255,14 @@ export function LoginForm({ className }: { className?: string }) {
                         }
                     </button>
 
-                    {/* E-mail não verificado */}
                     {emailNotVerified && (
-                        <div
-                            className="rounded-lg p-4 flex flex-col gap-3"
-                            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
-                        >
+                        <div className="rounded-xl p-4 flex flex-col gap-3" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
                             <div className="flex items-start gap-3">
                                 <Mail className="size-4 mt-0.5 shrink-0" style={{ color: 'rgba(255,255,255,0.4)' }} />
                                 <div className="flex flex-col gap-0.5">
                                     <p className="text-sm font-medium text-white">E-mail não verificado</p>
                                     <p className="text-xs" style={{ color: 'rgba(255,255,255,0.45)' }}>
-                                        Verifique sua caixa de entrada para <strong>{email}</strong>.
+                                        Verifique sua caixa para <strong>{email}</strong>.
                                     </p>
                                 </div>
                             </div>
@@ -296,13 +270,13 @@ export function LoginForm({ className }: { className?: string }) {
                                 type="button"
                                 onClick={() => resend(email, {
                                     onSuccess: () => { setResendCooldown(60); toast.success('E-mail reenviado!') },
-                                    onError: (error: Error) => toast.error(error.message),
+                                    onError: (e: Error) => toast.error(e.message),
                                 })}
                                 disabled={resending || resendCooldown > 0}
-                                className="text-xs rounded-md px-3 py-1.5 text-white/60 hover:text-white transition-colors disabled:opacity-50"
-                                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+                                className="text-xs rounded-lg px-3 py-1.5 transition-colors disabled:opacity-50"
+                                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)' }}
                             >
-                                {resending ? 'Enviando...' : resendCooldown > 0 ? `Reenviar em ${resendCooldown}s` : 'Reenviar e-mail de verificação'}
+                                {resending ? 'Enviando...' : resendCooldown > 0 ? `Reenviar em ${resendCooldown}s` : 'Reenviar verificação'}
                             </button>
                         </div>
                     )}
@@ -311,67 +285,35 @@ export function LoginForm({ className }: { className?: string }) {
 
             {/* ── LINK MÁGICO ───────────────────────────────────────────────── */}
             {mode === 'magic' && (
-                <form onSubmit={handleSendMagic} className="flex flex-col gap-4">
+                <form onSubmit={handleSendMagic} className="flex flex-col" style={{ gap: 20 }}>
                     {magicSent ? (
-                        <div className="flex flex-col items-center gap-4 py-6 text-center">
-                            <div
-                                className="flex size-14 items-center justify-center rounded-full"
-                                style={{ background: 'rgba(37,99,235,0.15)', border: '1px solid rgba(37,99,235,0.3)' }}
-                            >
-                                <Mail className="size-6" style={{ color: '#60a5fa' }} />
+                        <div className="flex flex-col items-center gap-5 py-6 text-center">
+                            <div className="flex size-16 items-center justify-center rounded-full" style={{ background: 'rgba(37,99,235,0.15)', border: '1px solid rgba(37,99,235,0.3)' }}>
+                                <Mail className="size-7" style={{ color: '#60a5fa' }} />
                             </div>
-                            <div className="flex flex-col gap-1">
-                                <p className="font-medium text-white">Verifique seu e-mail</p>
+                            <div className="flex flex-col gap-1.5">
+                                <p className="font-semibold text-white">Verifique seu e-mail</p>
                                 <p className="text-sm" style={{ color: 'rgba(255,255,255,0.45)' }}>
                                     Link enviado para <strong className="text-white/70">{email}</strong>
                                 </p>
                             </div>
-                            <button
-                                type="button"
-                                disabled={sendingMagic || magicCooldown > 0}
-                                onClick={() => sendMagic(email, {
-                                    onSuccess: () => setMagicCooldown(60),
-                                    onError: (error: Error) => toast.error(error.message),
-                                })}
-                                className="text-sm transition-colors disabled:opacity-50"
-                                style={{ color: '#60a5fa' }}
-                            >
+                            <button type="button" disabled={sendingMagic || magicCooldown > 0} onClick={() => sendMagic(email, { onSuccess: () => setMagicCooldown(60), onError: (e: Error) => toast.error(e.message) })} className="text-sm transition-colors disabled:opacity-50" style={{ color: '#60a5fa' }}>
                                 {sendingMagic ? 'Enviando...' : magicCooldown > 0 ? `Reenviar em ${magicCooldown}s` : 'Reenviar link'}
                             </button>
                         </div>
                     ) : (
                         <>
-                            <div className="flex flex-col gap-1.5">
-                                <label className="text-sm font-medium text-white/70">E-mail</label>
+                            <div className="flex flex-col gap-2">
+                                <label className="text-sm font-medium" style={{ color: 'rgba(255,255,255,0.65)' }}>E-mail</label>
                                 <div className="relative">
-                                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-4" style={{ color: 'rgba(255,255,255,0.3)' }} />
-                                    <input
-                                        type="email"
-                                        placeholder="seu@email.com"
-                                        autoComplete="email"
-                                        required
-                                        value={email}
-                                        onChange={(e) => setEmail(e.target.value)}
-                                        disabled={sendingMagic}
-                                        className={cn(inputBase, inputFocusClass, 'pl-10')}
-                                        style={inputStyle}
-                                    />
+                                    <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4" style={{ color: 'rgba(255,255,255,0.3)' }} />
+                                    <input type="email" placeholder="seu@email.com" autoComplete="email" required value={email} onChange={e => setEmail(e.target.value)} disabled={sendingMagic} className="login-input w-full rounded-xl py-3.5 pl-10 pr-4 text-sm outline-none transition-all" style={field} />
                                 </div>
                             </div>
-                            <button
-                                type="submit"
-                                disabled={sendingMagic}
-                                className="flex items-center justify-center gap-2 w-full rounded-lg py-3 text-sm font-semibold text-white transition-all disabled:opacity-60"
-                                style={{ background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)', boxShadow: '0 4px 20px rgba(37,99,235,0.4)' }}
-                            >
-                                {sendingMagic
-                                    ? <><Loader2 className="size-4 animate-spin" /> Enviando...</>
-                                    : 'Enviar link de acesso'
-                                }
+                            <button type="submit" disabled={sendingMagic} className="flex items-center justify-center gap-2 w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-all disabled:opacity-60" style={{ background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)', boxShadow: '0 4px 24px rgba(37,99,235,0.45)' }}>
+                                {sendingMagic ? <><Loader2 className="size-4 animate-spin" /> Enviando...</> : 'Enviar link de acesso'}
                             </button>
-                            <p className="text-xs text-center" style={{ color: 'rgba(255,255,255,0.35)' }}>
-                                Você receberá um link único para entrar sem precisar de senha.
-                            </p>
+                            <p className="text-xs text-center" style={{ color: 'rgba(255,255,255,0.35)' }}>Link único para entrar sem senha.</p>
                         </>
                     )}
                 </form>
@@ -381,75 +323,38 @@ export function LoginForm({ className }: { className?: string }) {
             {mode === 'otp' && (
                 <>
                     {otpStep === 'email' ? (
-                        <form onSubmit={handleSendOTP} className="flex flex-col gap-4">
-                            <div className="flex flex-col gap-1.5">
-                                <label className="text-sm font-medium text-white/70">E-mail</label>
+                        <form onSubmit={handleSendOTP} className="flex flex-col" style={{ gap: 20 }}>
+                            <div className="flex flex-col gap-2">
+                                <label className="text-sm font-medium" style={{ color: 'rgba(255,255,255,0.65)' }}>E-mail</label>
                                 <div className="relative">
-                                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-4" style={{ color: 'rgba(255,255,255,0.3)' }} />
-                                    <input
-                                        type="email"
-                                        placeholder="seu@email.com"
-                                        autoComplete="email"
-                                        required
-                                        value={email}
-                                        onChange={(e) => setEmail(e.target.value)}
-                                        disabled={sendingOTP}
-                                        className={cn(inputBase, inputFocusClass, 'pl-10')}
-                                        style={inputStyle}
-                                    />
+                                    <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4" style={{ color: 'rgba(255,255,255,0.3)' }} />
+                                    <input type="email" placeholder="seu@email.com" autoComplete="email" required value={email} onChange={e => setEmail(e.target.value)} disabled={sendingOTP} className="login-input w-full rounded-xl py-3.5 pl-10 pr-4 text-sm outline-none transition-all" style={field} />
                                 </div>
                             </div>
-                            <button
-                                type="submit"
-                                disabled={sendingOTP}
-                                className="flex items-center justify-center gap-2 w-full rounded-lg py-3 text-sm font-semibold text-white transition-all disabled:opacity-60"
-                                style={{ background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)', boxShadow: '0 4px 20px rgba(37,99,235,0.4)' }}
-                            >
+                            <button type="submit" disabled={sendingOTP} className="flex items-center justify-center gap-2 w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-all disabled:opacity-60" style={{ background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)', boxShadow: '0 4px 24px rgba(37,99,235,0.45)' }}>
                                 {sendingOTP ? <><Loader2 className="size-4 animate-spin" /> Enviando...</> : 'Enviar código'}
                             </button>
-                            <p className="text-xs text-center" style={{ color: 'rgba(255,255,255,0.35)' }}>
-                                Você receberá um código de 6 dígitos por e-mail.
-                            </p>
+                            <p className="text-xs text-center" style={{ color: 'rgba(255,255,255,0.35)' }}>Código de 6 dígitos enviado por e-mail.</p>
                         </form>
                     ) : (
-                        <form onSubmit={handleVerifyOTP} className="flex flex-col gap-4">
-                            <div className="flex flex-col gap-1 text-center">
+                        <form onSubmit={handleVerifyOTP} className="flex flex-col" style={{ gap: 20 }}>
+                            <div className="flex flex-col gap-1.5 text-center">
                                 <p className="text-sm font-medium text-white">Código enviado para</p>
                                 <p className="text-sm" style={{ color: 'rgba(255,255,255,0.45)' }}>{email}</p>
                             </div>
                             <div className="flex justify-center">
                                 <InputOTP maxLength={6} value={otp} onChange={setOtp} disabled={verifyingOTP}>
                                     <InputOTPGroup>
-                                        <InputOTPSlot index={0} />
-                                        <InputOTPSlot index={1} />
-                                        <InputOTPSlot index={2} />
-                                        <InputOTPSlot index={3} />
-                                        <InputOTPSlot index={4} />
-                                        <InputOTPSlot index={5} />
+                                        {[0,1,2,3,4,5].map(i => <InputOTPSlot key={i} index={i} />)}
                                     </InputOTPGroup>
                                 </InputOTP>
                             </div>
-                            <button
-                                type="submit"
-                                disabled={verifyingOTP || otp.length < 6}
-                                className="flex items-center justify-center gap-2 w-full rounded-lg py-3 text-sm font-semibold text-white transition-all disabled:opacity-60"
-                                style={{ background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)', boxShadow: '0 4px 20px rgba(37,99,235,0.4)' }}
-                            >
+                            <button type="submit" disabled={verifyingOTP || otp.length < 6} className="flex items-center justify-center gap-2 w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-all disabled:opacity-60" style={{ background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)', boxShadow: '0 4px 24px rgba(37,99,235,0.45)' }}>
                                 {verifyingOTP ? <><Loader2 className="size-4 animate-spin" /> Verificando...</> : 'Verificar código'}
                             </button>
-                            <div className="flex items-center justify-between text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>
-                                <button type="button" className="hover:text-white transition-colors" onClick={() => { setOtpStep('email'); setOtp('') }}>
-                                    ← Trocar e-mail
-                                </button>
-                                <button
-                                    type="button"
-                                    disabled={sendingOTP || otpCooldown > 0}
-                                    className="hover:text-white transition-colors disabled:opacity-50"
-                                    onClick={() => sendOTP(email, {
-                                        onSuccess: () => setOtpCooldown(60),
-                                        onError: (error: Error) => toast.error(error.message),
-                                    })}
-                                >
+                            <div className="flex items-center justify-between text-xs" style={{ color: 'rgba(255,255,255,0.38)' }}>
+                                <button type="button" className="hover:text-white transition-colors" onClick={() => { setOtpStep('email'); setOtp('') }}>← Trocar e-mail</button>
+                                <button type="button" disabled={sendingOTP || otpCooldown > 0} className="hover:text-white transition-colors disabled:opacity-50" onClick={() => sendOTP(email, { onSuccess: () => setOtpCooldown(60), onError: (e: Error) => toast.error(e.message) })}>
                                     {sendingOTP ? 'Enviando...' : otpCooldown > 0 ? `Reenviar em ${otpCooldown}s` : 'Reenviar código'}
                                 </button>
                             </div>
@@ -458,10 +363,10 @@ export function LoginForm({ className }: { className?: string }) {
                 </>
             )}
 
-            {/* Rodapé — criar conta */}
-            <p className="text-center text-sm" style={{ color: 'rgba(255,255,255,0.4)' }}>
+            {/* Rodapé */}
+            <p className="text-center text-sm" style={{ color: 'rgba(255,255,255,0.38)' }}>
                 Não tem uma conta?{' '}
-                <a href="/register" className="font-medium transition-colors" style={{ color: '#60a5fa' }}>
+                <a href="/register" className="font-semibold transition-colors" style={{ color: '#60a5fa' }}>
                     Criar conta
                 </a>
             </p>

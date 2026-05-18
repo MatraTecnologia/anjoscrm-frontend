@@ -6,7 +6,7 @@
 .login-input:-webkit-autofill,
 .login-input:-webkit-autofill:hover,
 .login-input:-webkit-autofill:focus {
-  -webkit-box-shadow: 0 0 0px 1000px #0d1730 inset !important;
+  -webkit-box-shadow: 0 0 0px 1000px #08183a inset !important;
   -webkit-text-fill-color: rgba(255, 255, 255, 0.9) !important;
   caret-color: white;
   transition: background-color 9999s ease-in-out 0s;

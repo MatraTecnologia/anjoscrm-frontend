@@ -2,7 +2,20 @@
 
 import Image from 'next/image'
 import { GlassCard } from 'react-glass-ui'
+import { motion } from 'framer-motion'
 import { LoginForm } from '@/components/login-form'
+
+const fadeUp = (delay = 0) => ({
+    initial: { opacity: 0, y: 32 },
+    animate: { opacity: 1, y: 0 },
+    transition: { duration: 0.6, delay, ease: [0.22, 1, 0.36, 1] },
+})
+
+const fadeIn = (delay = 0) => ({
+    initial: { opacity: 0 },
+    animate: { opacity: 1 },
+    transition: { duration: 0.8, delay, ease: 'easeOut' },
+})
 
 export default function LoginPage() {
     return (
@@ -12,26 +25,55 @@ export default function LoginPage() {
                 backgroundImage: 'url(/background.png)',
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
+                backgroundAttachment: 'fixed',
             }}
         >
-            {/* Logo 3D — atrás do card (z-5), grande, ponta na luz direita */}
-            <Image
-                src="/logo-3d.png"
-                alt=""
-                width={700}
-                height={200}
-                className="hidden lg:block absolute select-none pointer-events-none w-[500px]"
+            {/* Logo 3D — flutuando atrás do card */}
+            <motion.div
+                className="hidden lg:block absolute select-none pointer-events-none"
                 style={{
                     zIndex: 5,
                     top: '55%',
                     right: '100px',
-                    transform: 'translateY(-52%)',
-                    filter: 'drop-shadow(0 0 55px rgba(37,99,235,0.75)) drop-shadow(0 0 120px rgba(37,99,235,0.4))',
+                    translateY: '-52%',
                 }}
-                priority
-            />
+                initial={{ opacity: 0, x: 80, scale: 0.85 }}
+                animate={{ opacity: 1, x: 0, scale: 1 }}
+                transition={{ duration: 1, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
+            >
+                {/* Flutuação contínua */}
+                <motion.div
+                    animate={{
+                        y: [0, -18, 0],
+                        rotate: [0, 1.5, -1.5, 0],
+                    }}
+                    transition={{
+                        duration: 5,
+                        repeat: Infinity,
+                        ease: 'easeInOut',
+                    }}
+                >
+                    {/* Glow pulsante */}
+                    <motion.div
+                        animate={{ opacity: [0.7, 1, 0.7] }}
+                        transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                    >
+                        <Image
+                            src="/logo-3d.png"
+                            alt=""
+                            width={750}
+                            height={750}
+                            className="w-[500px] h-auto"
+                            style={{
+                                filter: 'drop-shadow(0 0 55px rgba(37,99,235,0.75)) drop-shadow(0 0 120px rgba(37,99,235,0.4))',
+                            }}
+                            priority
+                        />
+                    </motion.div>
+                </motion.div>
+            </motion.div>
 
-            {/* Layout principal — z-10, card fica acima da logo 3D */}
+            {/* Layout principal */}
             <div
                 className="relative min-h-screen flex items-center"
                 style={{ zIndex: 10 }}
@@ -40,24 +82,34 @@ export default function LoginPage() {
 
                     {/* Esquerda — logo + tagline */}
                     <div className="hidden lg:flex flex-col gap-6 w-[280px] flex-shrink-0">
-                        <Image
-                            src="/logo.png"
-                            alt="KinarCRM"
-                            width={185}
-                            height={65}
-                            className="object-contain object-left"
-                            style={{ filter: 'brightness(10)' }}
-                        />
-                        <p className="text-white/70 text-[15px] leading-relaxed font-light">
+                        <motion.div {...fadeUp(0.1)}>
+                            <Image
+                                src="/logo.png"
+                                alt="KinarCRM"
+                                width={185}
+                                height={65}
+                                className="object-contain object-left"
+                                style={{ filter: 'brightness(10)' }}
+                            />
+                        </motion.div>
+                        <motion.p
+                            className="text-white/70 text-[15px] leading-relaxed font-light"
+                            {...fadeUp(0.25)}
+                        >
                             Recuperamos oportunidades.<br />
                             Transformamos dados em{' '}
                             <span style={{ color: '#3b82f6' }}>receita</span>.
-                        </p>
+                        </motion.p>
                     </div>
 
-                    {/* Centro — card, flex-1 para empurrar para o meio */}
+                    {/* Centro — card com entrada de baixo */}
                     <div className="flex-1 flex items-center justify-center">
-                        <div style={{ width: 400 }}>
+                        <motion.div
+                            style={{ width: 480, height: 620, display: 'flex', flexDirection: 'column' }}
+                            initial={{ opacity: 0, y: 48, scale: 0.97 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            transition={{ duration: 0.7, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
+                        >
                             <GlassCard
                                 blur={28}
                                 distortion={60}
@@ -80,23 +132,23 @@ export default function LoginPage() {
                             >
                                 <LoginForm />
                             </GlassCard>
-                        </div>
+                        </motion.div>
                     </div>
 
-                    {/* Espaçador direito — empurra o card para a esquerda
-                        e reserva espaço para a logo 3D visível */}
+                    {/* Espaçador direito */}
                     <div className="hidden lg:block w-[340px] flex-shrink-0" />
 
                 </div>
             </div>
 
             {/* Copyright */}
-            <p
+            <motion.p
                 className="absolute bottom-6 left-12 text-white/20 text-xs"
                 style={{ zIndex: 10 }}
+                {...fadeIn(0.8)}
             >
                 © 2024 KinarCRM. Todos os direitos reservados.
-            </p>
+            </motion.p>
         </div>
     )
 }

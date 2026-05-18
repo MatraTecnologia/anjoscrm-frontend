@@ -4,7 +4,14 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Eye, EyeOff, Loader2, Mail, Lock, ArrowRight, Wand2, KeyRound } from 'lucide-react'
+import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
+
+const item = (i: number) => ({
+    initial: { opacity: 0, y: 20 },
+    animate: { opacity: 1, y: 0 },
+    transition: { duration: 0.45, delay: 0.35 + i * 0.08, ease: [0.22, 1, 0.36, 1] },
+})
 import {
     useSignIn,
     useResendVerification,
@@ -123,17 +130,17 @@ export function LoginForm({ className }: { className?: string }) {
         <div className={cn('flex flex-col', className)} style={{ gap: 28 }}>
 
             {/* Cabeçalho */}
-            <div className="flex flex-col gap-2 text-center">
+            <motion.div className="flex flex-col gap-2 text-center" {...item(0)}>
                 <h1 className="text-2xl font-bold text-white tracking-tight">
                     Bem-vindo de volta! 👋
                 </h1>
                 <p className="text-sm" style={{ color: 'rgba(255,255,255,0.45)' }}>
                     Faça login para acessar sua conta
                 </p>
-            </div>
+            </motion.div>
 
-            {/* Tabs — minimalistas com indicador de linha */}
-            <div className="flex items-center justify-center gap-1" style={{
+            {/* Tabs */}
+            <motion.div className="flex items-center justify-center gap-1" {...item(1)} style={{
                 borderBottom: '1px solid rgba(255,255,255,0.08)',
                 paddingBottom: 0,
             }}>
@@ -158,14 +165,14 @@ export function LoginForm({ className }: { className?: string }) {
                         )}
                     </button>
                 ))}
-            </div>
+            </motion.div>
 
             {/* ── SENHA ─────────────────────────────────────────────────────── */}
             {mode === 'password' && (
                 <form onSubmit={handlePasswordSubmit} className="flex flex-col" style={{ gap: 20 }}>
 
                     {/* E-mail */}
-                    <div className="flex flex-col gap-2">
+                    <motion.div className="flex flex-col gap-2" {...item(2)}>
                         <label className="text-sm font-medium" style={{ color: 'rgba(255,255,255,0.65)' }}>
                             E-mail
                         </label>
@@ -183,10 +190,10 @@ export function LoginForm({ className }: { className?: string }) {
                                 style={field}
                             />
                         </div>
-                    </div>
+                    </motion.div>
 
                     {/* Senha */}
-                    <div className="flex flex-col gap-2">
+                    <motion.div className="flex flex-col gap-2" {...item(3)}>
                         <label className="text-sm font-medium" style={{ color: 'rgba(255,255,255,0.65)' }}>
                             Senha
                         </label>
@@ -213,10 +220,10 @@ export function LoginForm({ className }: { className?: string }) {
                                 {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                             </button>
                         </div>
-                    </div>
+                    </motion.div>
 
                     {/* Lembrar + Esqueci */}
-                    <div className="flex items-center justify-between">
+                    <motion.div className="flex items-center justify-between" {...item(4)}>
                         <label className="flex items-center gap-2.5 cursor-pointer">
                             <div
                                 className="flex items-center justify-center rounded size-[18px] flex-shrink-0 cursor-pointer transition-all"
@@ -237,10 +244,10 @@ export function LoginForm({ className }: { className?: string }) {
                         <a href="/forgot-password" className="text-sm font-medium transition-colors" style={{ color: '#60a5fa' }}>
                             Esqueci minha senha
                         </a>
-                    </div>
+                    </motion.div>
 
                     {/* Botão entrar */}
-                    <button
+                    <motion.button {...item(5)}
                         type="submit"
                         disabled={signingIn}
                         className="flex items-center justify-center gap-2 w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-all disabled:opacity-60 mt-1"
@@ -253,7 +260,7 @@ export function LoginForm({ className }: { className?: string }) {
                             ? <><Loader2 className="size-4 animate-spin" /> Entrando...</>
                             : <><span>Entrar</span><ArrowRight className="size-4" /></>
                         }
-                    </button>
+                    </motion.button>
 
                     {emailNotVerified && (
                         <div className="rounded-xl p-4 flex flex-col gap-3" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
@@ -364,12 +371,12 @@ export function LoginForm({ className }: { className?: string }) {
             )}
 
             {/* Rodapé */}
-            <p className="text-center text-sm" style={{ color: 'rgba(255,255,255,0.38)' }}>
+            <motion.p className="text-center text-sm" style={{ color: 'rgba(255,255,255,0.38)' }} {...item(6)}>
                 Não tem uma conta?{' '}
                 <a href="/register" className="font-semibold transition-colors" style={{ color: '#60a5fa' }}>
                     Criar conta
                 </a>
-            </p>
+            </motion.p>
         </div>
     )
 }

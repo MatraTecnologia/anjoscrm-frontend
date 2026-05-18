@@ -35,22 +35,22 @@ export default function LoginPage() {
                 {/* Center — login card com GlassCard */}
                 <div style={{ width: 420, flexShrink: 0 }}>
                     <GlassCard
-                        blur={18}
-                        distortion={35}
+                        blur={22}
+                        distortion={50}
                         borderRadius={20}
                         borderSize={1.5}
-                        borderColor="rgba(59,130,246,0.35)"
+                        borderColor="rgba(100,160,255,0.4)"
                         borderOpacity={1}
-                        backgroundColor="#0a1228"
-                        backgroundOpacity={0.88}
-                        innerLightBlur={40}
-                        innerLightSpread={2}
-                        innerLightColor="rgba(59,130,246,0.15)"
-                        innerLightOpacity={0.6}
-                        outerLightBlur={60}
-                        outerLightSpread={4}
-                        outerLightColor="rgba(37,99,235,0.3)"
-                        outerLightOpacity={0.5}
+                        backgroundColor="#0d1c3e"
+                        backgroundOpacity={0.22}
+                        innerLightBlur={60}
+                        innerLightSpread={3}
+                        innerLightColor="rgba(59,130,246,0.2)"
+                        innerLightOpacity={0.5}
+                        outerLightBlur={80}
+                        outerLightSpread={6}
+                        outerLightColor="rgba(37,99,235,0.35)"
+                        outerLightOpacity={0.6}
                         padding="44px 40px"
                     >
                         <LoginForm />

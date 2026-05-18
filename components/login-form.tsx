@@ -23,6 +23,27 @@ import {
 } from '@/services/auth'
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp'
 
+const AUTH_ERRORS: Record<string, string> = {
+    'invalid email or password': 'E-mail ou senha inválidos',
+    'invalid credentials': 'Credenciais inválidas',
+    'user not found': 'Usuário não encontrado',
+    'email not verified': 'E-mail não verificado',
+    'too many requests': 'Muitas tentativas. Aguarde um momento.',
+    'invalid otp': 'Código inválido ou expirado',
+    'otp expired': 'Código expirado. Solicite um novo.',
+    'magic link expired': 'Link expirado. Solicite um novo.',
+    'invalid magic link': 'Link inválido ou expirado',
+    'account not found': 'Conta não encontrada',
+}
+
+function translateAuthError(message: string): string {
+    const lower = message.toLowerCase()
+    for (const [key, value] of Object.entries(AUTH_ERRORS)) {
+        if (lower.includes(key)) return value
+    }
+    return message
+}
+
 type LoginMode = 'password' | 'magic' | 'otp'
 type OTPStep = 'email' | 'code'
 
@@ -92,7 +113,7 @@ export function LoginForm({ className }: { className?: string }) {
                 if (msg.includes('not verified') || msg.includes('verificad') || msg.includes('email_not_verified')) {
                     setEmailNotVerified(true)
                 } else {
-                    toast.error(error.message)
+                    toast.error(translateAuthError(error.message))
                 }
             },
         })
@@ -102,7 +123,7 @@ export function LoginForm({ className }: { className?: string }) {
         e.preventDefault()
         sendMagic(email, {
             onSuccess: () => { setMagicSent(true); setMagicCooldown(60); toast.success('Link enviado!') },
-            onError: (error: Error) => toast.error(error.message),
+            onError: (error: Error) => toast.error(translateAuthError(error.message)),
         })
     }
 
@@ -110,7 +131,7 @@ export function LoginForm({ className }: { className?: string }) {
         e.preventDefault()
         sendOTP(email, {
             onSuccess: () => { setOtpStep('code'); setOtpCooldown(60); toast.success('Código enviado para ' + email) },
-            onError: (error: Error) => toast.error(error.message),
+            onError: (error: Error) => toast.error(translateAuthError(error.message)),
         })
     }
 
@@ -118,7 +139,7 @@ export function LoginForm({ className }: { className?: string }) {
         e.preventDefault()
         verifyOTP({ email, otp }, {
             onSuccess: () => { toast.success('Login realizado!'); router.push('/verify') },
-            onError: (error: Error) => { toast.error(error.message); setOtp('') },
+            onError: (error: Error) => { toast.error(translateAuthError(error.message)); setOtp('') },
         })
     }
 

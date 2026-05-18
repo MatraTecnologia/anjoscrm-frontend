@@ -239,7 +239,7 @@ function DealCardBody({
 
     return (
         <>
-            <div className="mx-2 mb-2 rounded-lg border bg-background shadow-sm hover:shadow-md transition-shadow select-none">
+            <div className="mx-2 mb-2 rounded-lg select-none transition-shadow" style={{ background: 'rgba(10,18,40,0.75)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.07)', boxShadow: '0 2px 12px rgba(0,0,0,0.3)' }}>
                 <div className="flex items-start gap-2 p-3 pb-2">
                     {/* Drag handle */}
                     {handleProps && (
@@ -1459,7 +1459,7 @@ function KanbanColumn({
     }
 
     return (
-        <div className="w-72 flex-shrink-0 flex flex-col rounded-xl bg-muted/40 border border-border/60">
+        <div className="w-72 flex-shrink-0 flex flex-col rounded-xl" style={{ background: 'rgba(6,10,24,0.6)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.06)' }}>
             {/* Header */}
             <div className="px-3 pt-3 pb-2">
                 <div className="group flex items-center gap-1.5">

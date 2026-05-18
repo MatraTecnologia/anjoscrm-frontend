@@ -20,12 +20,17 @@ type OTPStep = 'email' | 'code'
 // ── Estilos base dark ────────────────────────────────────────────────────────
 
 const inputBase =
-    'w-full rounded-lg px-4 py-3 text-sm text-white placeholder:text-white/30 outline-none transition-colors'
+    'login-input w-full rounded-lg px-4 py-3 text-sm outline-none transition-all'
 const inputStyle: React.CSSProperties = {
-    background: 'rgba(255,255,255,0.05)',
+    background: '#0d1730',
     border: '1px solid rgba(255,255,255,0.1)',
+    color: 'rgba(255,255,255,0.88)',
+    caretColor: 'white',
 }
-const inputFocusClass = 'focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500/60'
+const inputFocusStyle = {
+    '--tw-ring-color': 'rgba(37,99,235,0.4)',
+}
+const inputFocusClass = 'focus:outline-none focus:ring-2 focus:ring-blue-500/40'
 
 // ── Componente ───────────────────────────────────────────────────────────────
 

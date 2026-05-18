@@ -7,10 +7,12 @@ import { Eye, EyeOff, Loader2, Mail, Lock, ArrowRight, Wand2, KeyRound } from 'l
 import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 
+const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1]
+
 const item = (i: number) => ({
     initial: { opacity: 0, y: 20 },
     animate: { opacity: 1, y: 0 },
-    transition: { duration: 0.45, delay: 0.35 + i * 0.08, ease: [0.22, 1, 0.36, 1] },
+    transition: { duration: 0.45, delay: 0.35 + i * 0.08, ease: EASE },
 })
 import {
     useSignIn,

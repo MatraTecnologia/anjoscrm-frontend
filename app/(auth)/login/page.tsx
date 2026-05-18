@@ -5,16 +5,18 @@ import { GlassCard } from 'react-glass-ui'
 import { motion } from 'framer-motion'
 import { LoginForm } from '@/components/login-form'
 
+const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1]
+
 const fadeUp = (delay = 0) => ({
     initial: { opacity: 0, y: 32 },
     animate: { opacity: 1, y: 0 },
-    transition: { duration: 0.6, delay, ease: [0.22, 1, 0.36, 1] },
+    transition: { duration: 0.6, delay, ease: EASE },
 })
 
 const fadeIn = (delay = 0) => ({
     initial: { opacity: 0 },
     animate: { opacity: 1 },
-    transition: { duration: 0.8, delay, ease: 'easeOut' },
+    transition: { duration: 0.8, delay, ease: 'easeOut' as const },
 })
 
 export default function LoginPage() {
@@ -39,7 +41,7 @@ export default function LoginPage() {
                 }}
                 initial={{ opacity: 0, x: 80, scale: 0.85 }}
                 animate={{ opacity: 1, x: 0, scale: 1 }}
-                transition={{ duration: 1, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
+                transition={{ duration: 1, delay: 0.3, ease: EASE }}
             >
                 {/* Flutuação contínua */}
                 <motion.div
@@ -108,7 +110,7 @@ export default function LoginPage() {
                             style={{ width: 480, height: 620, display: 'flex', flexDirection: 'column' }}
                             initial={{ opacity: 0, y: 48, scale: 0.97 }}
                             animate={{ opacity: 1, y: 0, scale: 1 }}
-                            transition={{ duration: 0.7, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
+                            transition={{ duration: 0.7, delay: 0.15, ease: EASE }}
                         >
                             <GlassCard
                                 blur={28}

@@ -770,7 +770,7 @@ function DealCustomFieldsTab({ dealId, enterpriseId }: { dealId: string; enterpr
     useEffect(() => {
         if (!fields.length) return
         const initial: Record<string, string> = {}
-        fields.forEach(f => { initial[f.id] = f.value ?? '' })
+        fields.forEach(f => { initial[f.id] = (f.value as string | null) ?? '' })
         setValues(initial)
         setDirty(false)
     }, [fields])

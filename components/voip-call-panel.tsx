@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
-import { Phone, PhoneOff, Mic, MicOff, Loader2, MessageSquare } from 'lucide-react'
+import { useEffect, useRef, useCallback } from 'react'
+import { Phone, PhoneOff, Mic, MicOff, Loader2, MessageSquare, RotateCcw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useVoipCall, formatDuration, type CallStatus } from '@/services/voip'
 import { useVoipStore } from '@/stores/voip-store'
@@ -51,11 +51,16 @@ export function VoipCallPanel({ phone, leadName, enterpriseId, onClose }: Props)
     const { status, duration, error, isMuted, startCall, hangup, toggleMute } = useVoipCall(setCallSid)
 
     const transcriptEndRef = useRef<HTMLDivElement>(null)
+    // Usar refs para phone/enterpriseId evita que o efeito rode novamente se os valores mudarem
+    const phoneRef = useRef(phone)
+    const enterpriseIdRef = useRef(enterpriseId)
+    const startCallRef = useRef(startCall)
+    startCallRef.current = startCall
 
-    // Inicia a chamada ao montar
+    // Inicia a chamada ao montar (uma única vez)
     useEffect(() => {
-        startCall(phone, enterpriseId)
-    }, []) // eslint-disable-line react-hooks/exhaustive-deps
+        startCallRef.current(phoneRef.current, enterpriseIdRef.current)
+    }, [])
 
     // Auto-scroll na transcrição
     useEffect(() => {
@@ -66,18 +71,41 @@ export function VoipCallPanel({ phone, leadName, enterpriseId, onClose }: Props)
     const isEnded = status === 'ended' || status === 'error'
     const isLoading = status === 'connecting' || status === 'calling' || status === 'ringing'
 
+    // Referência estável para onClose — evita que o timer de auto-close fique resetando
+    const onCloseRef = useRef(onClose)
+    onCloseRef.current = onClose
+
     // Fecha automaticamente 3s após encerrar
     useEffect(() => {
         if (status !== 'ended' && status !== 'error') return
-        const t = setTimeout(onClose, 3000)
+        const t = setTimeout(() => onCloseRef.current(), 3000)
         return () => clearTimeout(t)
-    }, [status, onClose])
+    }, [status])
+
+    const handleHangup = useCallback((e: React.MouseEvent) => {
+        e.stopPropagation()
+        if (isEnded) { onCloseRef.current(); return }
+        hangup()
+    }, [isEnded, hangup])
+
+    const handleToggleMute = useCallback((e: React.MouseEvent) => {
+        e.stopPropagation()
+        toggleMute()
+    }, [toggleMute])
+
+    const handleRetry = useCallback((e: React.MouseEvent) => {
+        e.stopPropagation()
+        startCallRef.current(phoneRef.current, enterpriseIdRef.current)
+    }, [])
 
     return (
-        <div className={cn(
-            'fixed bottom-6 right-6 z-[200] rounded-2xl border bg-background shadow-2xl overflow-hidden transition-all duration-300',
-            transcript.length > 0 ? 'w-80' : 'w-72',
-        )}>
+        <div
+            className={cn(
+                'fixed bottom-6 right-6 z-[200] rounded-2xl border bg-background shadow-2xl overflow-hidden transition-all duration-300',
+                transcript.length > 0 ? 'w-80' : 'w-72',
+            )}
+            onPointerDown={(e) => e.stopPropagation()}
+        >
 
             {/* Barra de status colorida */}
             <div className={cn(
@@ -174,10 +202,24 @@ export function VoipCallPanel({ phone, leadName, enterpriseId, onClose }: Props)
 
                 {/* Controles */}
                 <div className="flex items-center justify-center gap-4">
+                    {/* Retry (só no estado de erro) */}
+                    {status === 'error' && (
+                        <button
+                            type="button"
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={handleRetry}
+                            className="flex flex-col items-center gap-1 p-3 rounded-xl bg-muted text-muted-foreground hover:bg-muted/80 transition-all"
+                        >
+                            <RotateCcw className="size-5" />
+                            <span className="text-[10px]">Tentar</span>
+                        </button>
+                    )}
+
                     {/* Mudo */}
                     <button
                         type="button"
-                        onClick={toggleMute}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={handleToggleMute}
                         disabled={!isActive}
                         className={cn(
                             'flex flex-col items-center gap-1 p-3 rounded-xl transition-all',
@@ -192,13 +234,14 @@ export function VoipCallPanel({ phone, leadName, enterpriseId, onClose }: Props)
                             ? <MicOff className="size-5" />
                             : <Mic className="size-5" />
                         }
-                        <span className="text-[10px]">{isMuted ? 'Ativar' : 'Mudo'}</span>
+                        <span className="text-[10px]">{isMuted ? 'Ativar mic' : 'Mudo'}</span>
                     </button>
 
-                    {/* Desligar */}
+                    {/* Desligar / Fechar */}
                     <button
                         type="button"
-                        onClick={isEnded ? onClose : hangup}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={handleHangup}
                         className={cn(
                             'flex flex-col items-center gap-1 p-3.5 rounded-2xl transition-all',
                             isEnded
@@ -206,7 +249,7 @@ export function VoipCallPanel({ phone, leadName, enterpriseId, onClose }: Props)
                                 : 'bg-destructive text-white hover:bg-destructive/90 shadow-lg shadow-destructive/30',
                         )}
                     >
-                        <PhoneOff className="size-6" />
+                        {isEnded ? <Phone className="size-6" /> : <PhoneOff className="size-6" />}
                         <span className="text-[10px]">{isEnded ? 'Fechar' : 'Encerrar'}</span>
                     </button>
                 </div>

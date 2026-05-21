@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import { getSocket } from '@/lib/socket'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -56,21 +56,21 @@ export function VoipStoreProvider({ children }: { children: React.ReactNode }) {
         }
     }, [callSid])
 
-    function startCall(phone: string, leadName: string, enterpriseId: string) {
+    const startCall = useCallback((phone: string, leadName: string, enterpriseId: string) => {
         setTranscript([])
         setCallSidState(null)
         setActiveCall({ phone, leadName, enterpriseId })
-    }
+    }, [])
 
     const setCallSid = useCallback((sid: string) => {
         setCallSidState(sid)
     }, [])
 
-    function endCall() {
+    const endCall = useCallback(() => {
         setActiveCall(null)
         setCallSidState(null)
         setTranscript([])
-    }
+    }, [])
 
     return (
         <VoipStoreContext.Provider value={{ activeCall, callSid, transcript, startCall, setCallSid, endCall }}>

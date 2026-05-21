@@ -137,10 +137,12 @@ const PERM_LABELS: Record<string, string> = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function initials(name: string) {
+function initials(name: string | null | undefined) {
+    if (!name) return '?'
     return name
         .split(' ')
         .map(w => w[0])
+        .filter(Boolean)
         .slice(0, 2)
         .join('')
         .toUpperCase()
@@ -505,21 +507,21 @@ function MembersSection({
                         <div key={member.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
                             {/* Avatar */}
                             <div className="size-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-semibold shrink-0 overflow-hidden">
-                                {member.user.image
-                                    ? <img src={member.user.image} alt={member.user.name} className="size-full object-cover" />
-                                    : initials(member.user.name)
+                                {member.user?.image
+                                    ? <img src={member.user.image} alt={member.user?.name ?? ''} className="size-full object-cover" />
+                                    : initials(member.user?.name)
                                 }
                             </div>
 
                             {/* Info */}
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
-                                    <p className="text-sm font-medium truncate">{member.user.name}</p>
+                                    <p className="text-sm font-medium truncate">{member.user?.name ?? '—'}</p>
                                     {isMe && (
                                         <Badge variant="secondary" className="text-xs py-0">Você</Badge>
                                     )}
                                 </div>
-                                <p className="text-xs text-muted-foreground truncate">{member.user.email}</p>
+                                <p className="text-xs text-muted-foreground truncate">{member.user?.email ?? ''}</p>
                             </div>
 
                             {/* Joined date */}
@@ -569,7 +571,7 @@ function MembersSection({
                     <AlertDialogHeader>
                         <AlertDialogTitle>Remover membro?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            <strong>{removeTarget?.user.name}</strong> perderá o acesso à empresa imediatamente.
+                            <strong>{removeTarget?.user?.name ?? '—'}</strong> perderá o acesso à empresa imediatamente.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -646,7 +648,7 @@ function RolesSection({
                                 )}
                             </div>
                             <p className="text-xs text-muted-foreground">
-                                {role._count.members} membro{role._count.members !== 1 ? 's' : ''} · {role.permissions.length} permiss{role.permissions.length !== 1 ? 'ões' : 'ão'}
+                                {role._count?.members ?? 0} membro{(role._count?.members ?? 0) !== 1 ? 's' : ''} · {role.permissions.length} permiss{role.permissions.length !== 1 ? 'ões' : 'ão'}
                             </p>
                         </div>
 
@@ -674,8 +676,8 @@ function RolesSection({
                         <AlertDialogTitle>Remover cargo?</AlertDialogTitle>
                         <AlertDialogDescription>
                             O cargo <strong>{deleteTarget?.name}</strong> será removido.
-                            {(deleteTarget?._count.members ?? 0) > 0 && (
-                                <> Ele possui <strong>{deleteTarget?._count.members} membro{deleteTarget?._count.members !== 1 ? 's' : ''}</strong> — estes membros perderão o cargo.</>
+                            {(deleteTarget?._count?.members ?? 0) > 0 && (
+                                <> Ele possui <strong>{deleteTarget?._count?.members ?? 0} membro{(deleteTarget?._count?.members ?? 0) !== 1 ? 's' : ''}</strong> — estes membros perderão o cargo.</>
                             )}
                         </AlertDialogDescription>
                     </AlertDialogHeader>

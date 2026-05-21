@@ -393,31 +393,33 @@ function CreateRoleDialog({
                             const someOn = group.perms.some(p => selected.has(p))
                             return (
                                 <div key={group.label} className="rounded-md border p-3 flex flex-col gap-2">
-                                    <div
-                                        className="flex items-center gap-2 cursor-pointer"
-                                        onClick={() => toggleGroup(group.perms)}
-                                    >
+                                    <div className="flex items-center gap-2">
                                         <Checkbox
                                             checked={someOn && !allOn ? 'indeterminate' : allOn}
                                             onCheckedChange={() => toggleGroup(group.perms)}
                                         />
-                                        <span className="text-sm font-medium">{group.label}</span>
+                                        <span
+                                            className="text-sm font-medium cursor-pointer select-none"
+                                            onClick={() => toggleGroup(group.perms)}
+                                        >
+                                            {group.label}
+                                        </span>
                                     </div>
                                     <div className="ml-6 flex flex-wrap gap-x-4 gap-y-1.5">
                                         {group.perms.map(perm => (
-                                            <label
-                                                key={perm}
-                                                className="flex items-center gap-1.5 cursor-pointer"
-                                            >
+                                            <div key={perm} className="flex items-center gap-1.5">
                                                 <Checkbox
                                                     checked={selected.has(perm)}
                                                     onCheckedChange={() => toggle(perm)}
                                                     disabled={isPending}
                                                 />
-                                                <span className="text-xs text-muted-foreground">
+                                                <span
+                                                    className="text-xs text-muted-foreground select-none cursor-pointer"
+                                                    onClick={() => !isPending && toggle(perm)}
+                                                >
                                                     {PERM_LABELS[perm] ?? perm}
                                                 </span>
-                                            </label>
+                                            </div>
                                         ))}
                                     </div>
                                 </div>

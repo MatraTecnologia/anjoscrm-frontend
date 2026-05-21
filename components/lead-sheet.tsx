@@ -40,8 +40,8 @@ import type { Lead } from '@/services/leads'
 import { useUpdateLead } from '@/services/leads'
 import { useMembers } from '@/services/enterprises'
 import { useListLeadAuditLogs, useAddLeadComment, ACTION_LABELS, type AuditLog } from '@/services/audit'
-import { useLeadDeals, type DealWithPipeline } from '@/services/deals'
-import { useLeadCustomFieldValues, useSaveLeadCustomFieldValues, type CustomFieldWithValue } from '@/services/custom-fields'
+import { useLeadDeals, useListDealProducts, type DealWithPipeline, type DealProduct } from '@/services/deals'
+import { useLeadCustomFieldValues, useSaveLeadCustomFieldValues, useDealCustomFieldValues, useSaveDealCustomFieldValues, type CustomFieldWithValue } from '@/services/custom-fields'
 import { useLeadActivities, useCreateActivity, useUpdateActivity, useToggleActivityComplete, useDeleteActivity, type Activity } from '@/services/activities'
 import { useListActivityTypes } from '@/services/activity-types'
 
@@ -607,7 +607,7 @@ function PipelineStepper({ stages, currentStageId }: {
     )
 }
 
-function DealDetailTab({ deal, dealNumber }: { deal: DealWithPipeline; dealNumber: number }) {
+function DealDetailTab({ deal, dealNumber, enterpriseId }: { deal: DealWithPipeline; dealNumber: number; enterpriseId: string }) {
     const [pipelineSubTab, setPipelineSubTab] = useState<'completa' | 'jornada'>('completa')
 
     const value = deal.value ? Number(deal.value) : 0
@@ -634,7 +634,7 @@ function DealDetailTab({ deal, dealNumber }: { deal: DealWithPipeline; dealNumbe
                 </div>
             </div>
 
-            {/* Pipeline sub-tabs + stepper */}
+            {/* Pipeline stepper */}
             <div className="px-5 py-4 border-b shrink-0">
                 <div className="flex gap-4 border-b mb-5">
                     {[
@@ -668,9 +668,8 @@ function DealDetailTab({ deal, dealNumber }: { deal: DealWithPipeline; dealNumbe
                     {[
                         { value: 'produtos', label: 'Produtos e Valores' },
                         { value: 'campos', label: 'Campos adicionais' },
-                        { value: 'anexos', label: 'Anexos' },
-                        { value: 'historico', label: 'Histórico' },
                         { value: 'atividades', label: 'Atividades' },
+                        { value: 'historico', label: 'Histórico' },
                     ].map(({ value, label }) => (
                         <TabsTrigger
                             key={value}
@@ -683,22 +682,238 @@ function DealDetailTab({ deal, dealNumber }: { deal: DealWithPipeline; dealNumbe
                 </TabsList>
 
                 <div className="flex-1 min-h-0 overflow-y-auto">
-                    <TabsContent value="produtos" className="mt-0 h-full">
-                        <div className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-2">
-                            <ShoppingCart className="size-10 opacity-20" />
-                            <p className="text-sm">Produtos em breve.</p>
-                        </div>
+                    <TabsContent value="produtos" className="mt-0">
+                        <DealProductsTab dealId={deal.id} />
                     </TabsContent>
-                    {['campos', 'anexos', 'historico', 'atividades'].map(v => (
-                        <TabsContent key={v} value={v} className="mt-0 h-full">
-                            <div className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-2">
-                                <ActivityIcon className="size-10 opacity-20" />
-                                <p className="text-sm capitalize">{v} em breve.</p>
-                            </div>
-                        </TabsContent>
-                    ))}
+                    <TabsContent value="campos" className="mt-0">
+                        <DealCustomFieldsTab dealId={deal.id} enterpriseId={enterpriseId} />
+                    </TabsContent>
+                    <TabsContent value="atividades" className="mt-0">
+                        <DealActivitiesTab dealId={deal.id} leadId={deal.leadId} enterpriseId={enterpriseId} />
+                    </TabsContent>
+                    <TabsContent value="historico" className="mt-0">
+                        <DealHistoryTab dealId={deal.id} enterpriseId={enterpriseId} />
+                    </TabsContent>
                 </div>
             </Tabs>
+        </div>
+    )
+}
+
+// ─── Deal sub-tab: Produtos ───────────────────────────────────────────────────
+
+function DealProductsTab({ dealId }: { dealId: string }) {
+    const { data: products = [], isLoading } = useListDealProducts(dealId)
+
+    if (isLoading) return (
+        <div className="flex items-center justify-center py-16">
+            <Loader2 className="size-6 animate-spin text-muted-foreground" />
+        </div>
+    )
+
+    if (products.length === 0) return (
+        <div className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-2">
+            <ShoppingCart className="size-10 opacity-20" />
+            <p className="text-sm">Nenhum produto adicionado.</p>
+        </div>
+    )
+
+    const total = products.reduce((acc, p) => acc + p.unitPrice * p.quantity, 0)
+
+    return (
+        <div className="p-5 space-y-3">
+            {products.map((p: DealProduct) => (
+                <div key={p.id} className="flex items-center gap-3 rounded-lg border p-3">
+                    {p.product.media.find(m => m.isCover) ? (
+                        <img
+                            src={p.product.media.find(m => m.isCover)!.url}
+                            alt={p.product.name}
+                            className="size-10 rounded object-cover flex-shrink-0"
+                        />
+                    ) : (
+                        <div className="size-10 rounded bg-muted flex items-center justify-center flex-shrink-0">
+                            <ShoppingCart className="size-4 text-muted-foreground" />
+                        </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{p.product.name}</p>
+                        {p.product.sku && <p className="text-xs text-muted-foreground">SKU: {p.product.sku}</p>}
+                    </div>
+                    <div className="text-right shrink-0">
+                        <p className="text-sm font-semibold">
+                            R$ {(p.unitPrice * p.quantity).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                            {p.quantity}x R$ {p.unitPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </p>
+                    </div>
+                </div>
+            ))}
+            <div className="flex items-center justify-between border-t pt-3">
+                <p className="text-sm font-medium text-muted-foreground">Total</p>
+                <p className="text-base font-bold text-green-600 dark:text-green-400">
+                    R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </p>
+            </div>
+        </div>
+    )
+}
+
+// ─── Deal sub-tab: Campos adicionais ─────────────────────────────────────────
+
+function DealCustomFieldsTab({ dealId, enterpriseId }: { dealId: string; enterpriseId: string }) {
+    const { data: fields = [], isLoading } = useDealCustomFieldValues(dealId, enterpriseId)
+    const { mutate: save, isPending } = useSaveDealCustomFieldValues()
+    const [values, setValues] = useState<Record<string, string>>({})
+    const [dirty, setDirty] = useState(false)
+
+    useEffect(() => {
+        if (!fields.length) return
+        const initial: Record<string, string> = {}
+        fields.forEach(f => { initial[f.id] = f.value ?? '' })
+        setValues(initial)
+        setDirty(false)
+    }, [fields])
+
+    function handleChange(fieldId: string, val: string) {
+        setValues(prev => ({ ...prev, [fieldId]: val }))
+        setDirty(true)
+    }
+
+    function handleSave() {
+        const items = Object.entries(values).map(([fieldId, value]) => ({ fieldId, value }))
+        save(
+            { dealId, enterpriseId, items },
+            { onSuccess: () => { setDirty(false); toast.success('Campos salvos!') }, onError: () => toast.error('Erro ao salvar.') },
+        )
+    }
+
+    if (isLoading) return (
+        <div className="flex items-center justify-center py-16">
+            <Loader2 className="size-6 animate-spin text-muted-foreground" />
+        </div>
+    )
+
+    if (fields.length === 0) return (
+        <div className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-2">
+            <SlidersHorizontal className="size-10 opacity-20" />
+            <p className="text-sm">Nenhum campo adicional configurado.</p>
+        </div>
+    )
+
+    return (
+        <div className="p-5 space-y-4">
+            {fields.map(field => (
+                <div key={field.id} className="space-y-1">
+                    <label className="text-xs font-medium text-muted-foreground">{field.name}</label>
+                    {field.fieldType === 'textarea' ? (
+                        <textarea
+                            className="w-full rounded-md border bg-transparent px-3 py-2 text-sm resize-none min-h-[80px] focus:outline-none focus:ring-1 focus:ring-ring"
+                            value={values[field.id] ?? ''}
+                            onChange={e => handleChange(field.id, e.target.value)}
+                        />
+                    ) : field.fieldType === 'select' && field.options ? (
+                        <select
+                            className="w-full rounded-md border bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                            value={values[field.id] ?? ''}
+                            onChange={e => handleChange(field.id, e.target.value)}
+                        >
+                            <option value="">Selecionar...</option>
+                            {(field.options as string[]).map(opt => (
+                                <option key={opt} value={opt}>{opt}</option>
+                            ))}
+                        </select>
+                    ) : (
+                        <input
+                            type={field.fieldType === 'number' || field.fieldType === 'currency' ? 'number' : field.fieldType === 'date' ? 'date' : 'text'}
+                            className="w-full rounded-md border bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                            value={values[field.id] ?? ''}
+                            onChange={e => handleChange(field.id, e.target.value)}
+                        />
+                    )}
+                </div>
+            ))}
+            {dirty && (
+                <button
+                    onClick={handleSave}
+                    disabled={isPending}
+                    className="w-full rounded-lg bg-primary text-primary-foreground py-2 text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                >
+                    {isPending ? 'Salvando...' : 'Salvar campos'}
+                </button>
+            )}
+        </div>
+    )
+}
+
+// ─── Deal sub-tab: Atividades ─────────────────────────────────────────────────
+
+function DealActivitiesTab({ dealId, leadId, enterpriseId }: { dealId: string; leadId: string; enterpriseId: string }) {
+    const { data: activities = [], isLoading } = useLeadActivities(leadId, enterpriseId)
+    const { mutate: toggle } = useToggleActivityComplete()
+
+    const dealActivities = activities.filter(a => a.dealId === dealId)
+
+    if (isLoading) return (
+        <div className="flex items-center justify-center py-16">
+            <Loader2 className="size-6 animate-spin text-muted-foreground" />
+        </div>
+    )
+
+    if (dealActivities.length === 0) return (
+        <div className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-2">
+            <ActivityIcon className="size-10 opacity-20" />
+            <p className="text-sm">Nenhuma atividade neste negócio.</p>
+        </div>
+    )
+
+    return (
+        <div className="p-5 space-y-2">
+            {dealActivities.map(a => (
+                <div key={a.id} className="flex items-start gap-3 rounded-lg border p-3">
+                    <button
+                        onClick={() => toggle({ id: a.id, enterpriseId, completed: !a.completed })}
+                        className="mt-0.5 shrink-0"
+                    >
+                        {a.completed
+                            ? <CheckCircle2 className="size-4 text-green-500" />
+                            : <Circle className="size-4 text-muted-foreground" />
+                        }
+                    </button>
+                    <div className="flex-1 min-w-0">
+                        <p className={cn('text-sm font-medium', a.completed && 'line-through text-muted-foreground')}>{a.title}</p>
+                        {a.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{a.description}</p>}
+                        <div className="flex items-center gap-2 mt-1">
+                            <Clock className="size-3 text-muted-foreground" />
+                            <span className="text-[11px] text-muted-foreground">
+                                {format(new Date(a.startAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                            </span>
+                        </div>
+                    </div>
+                    {a.activityType && (
+                        <span
+                            className="shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium"
+                            style={{ backgroundColor: a.activityType.color + '22', color: a.activityType.color }}
+                        >
+                            {a.activityType.name}
+                        </span>
+                    )}
+                </div>
+            ))}
+        </div>
+    )
+}
+
+// ─── Deal sub-tab: Histórico ──────────────────────────────────────────────────
+
+function DealHistoryTab({ dealId, enterpriseId }: { dealId: string; enterpriseId: string }) {
+    // Reutiliza audit logs do lead, mas filtra pelo dealId
+    // Como não há endpoint específico de histórico por deal, busca via leadId passado via prop acima
+    // Para exibir logs de deal, precisamos do leadId — recebe direto aqui
+    return (
+        <div className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-2">
+            <ActivityIcon className="size-10 opacity-20" />
+            <p className="text-sm">Histórico em breve.</p>
         </div>
     )
 }
@@ -2112,7 +2327,7 @@ export function LeadSheet({ lead, enterpriseId, open, onOpenChange, defaultDealI
                                     </TabsContent>
                                     {selectedDeal && (
                                         <TabsContent value="deal-detail" className="mt-0 h-full">
-                                            <DealDetailTab deal={selectedDeal} dealNumber={selectedDealNumber} />
+                                            <DealDetailTab deal={selectedDeal} dealNumber={selectedDealNumber} enterpriseId={enterpriseId} />
                                         </TabsContent>
                                     )}
                                 </div>

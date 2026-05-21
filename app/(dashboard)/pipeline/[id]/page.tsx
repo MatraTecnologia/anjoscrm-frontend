@@ -69,6 +69,7 @@ import { keys } from '@/lib/keys'
 import { CadenceConfigSheet } from '@/components/cadence-config-sheet'
 import { PipelineMetaIntegrationSheet } from '@/components/pipeline-meta-integration-sheet'
 import { MetaLeadsImportDialog } from '@/components/meta-leads-import-dialog'
+import { useVoipStore } from '@/stores/voip-store'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -124,6 +125,7 @@ function DealCardBody({
     enterpriseId,
     handleProps,
     onWhatsappClick,
+    onPhoneClick,
     cardFields = DEFAULT_CARD_FIELDS,
 }: {
     deal: Deal
@@ -132,6 +134,7 @@ function DealCardBody({
     enterpriseId: string
     handleProps?: React.HTMLAttributes<HTMLElement>
     onWhatsappClick?: (lead: DealLead) => void
+    onPhoneClick?: (lead: DealLead) => void
     cardFields?: Record<string, boolean>
 }) {
     const qc = useQueryClient()
@@ -387,15 +390,15 @@ function DealCardBody({
                             >
                                 <MessageCircle className="size-3.5" />
                             </button>
-                            <a
-                                href={`tel:${deal.lead.phone}`}
+                            <button
+                                type="button"
                                 className="p-1 rounded hover:bg-muted transition-colors text-blue-500"
                                 title={`Ligar: ${deal.lead.phone}`}
                                 onPointerDown={(e) => e.stopPropagation()}
-                                onClick={(e) => e.stopPropagation()}
+                                onClick={(e) => { e.stopPropagation(); onPhoneClick?.(deal.lead) }}
                             >
                                 <Phone className="size-3.5" />
-                            </a>
+                            </button>
                         </>
                     )}
                     <Popover open={tagPickerOpen} onOpenChange={setTagPickerOpen}>
@@ -464,6 +467,7 @@ function DealCard({
     stages,
     enterpriseId,
     onWhatsappClick,
+    onPhoneClick,
     cardFields,
 }: {
     deal: Deal
@@ -471,6 +475,7 @@ function DealCard({
     stages: PipelineStage[]
     enterpriseId: string
     onWhatsappClick?: (lead: DealLead) => void
+    onPhoneClick?: (lead: DealLead) => void
     cardFields?: Record<string, boolean>
 }) {
     const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
@@ -491,6 +496,7 @@ function DealCard({
                 enterpriseId={enterpriseId}
                 handleProps={listeners}
                 onWhatsappClick={onWhatsappClick}
+                onPhoneClick={onPhoneClick}
                 cardFields={cardFields}
             />
         </div>
@@ -1061,6 +1067,7 @@ function KanbanColumn({
     filters,
     isBilateral,
     onWhatsappClick,
+    onPhoneClick,
     cardFields,
 }: {
     stage: PipelineStage
@@ -1072,6 +1079,7 @@ function KanbanColumn({
     filters?: Filters
     isBilateral?: boolean
     onWhatsappClick?: (lead: DealLead) => void
+    onPhoneClick?: (lead: DealLead) => void
     cardFields?: Record<string, boolean>
 }) {
     const scrollRef = useRef<HTMLDivElement>(null)
@@ -1357,6 +1365,7 @@ function KanbanColumn({
                                                 stages={stages}
                                                 enterpriseId={enterpriseId}
                                                 onWhatsappClick={onWhatsappClick}
+                                                onPhoneClick={onPhoneClick}
                                                 cardFields={cardFields}
                                             />
                                         )}
@@ -2261,6 +2270,12 @@ export default function PipelinePage() {
         setChatLead(prev => prev?.id === lead.id ? null : lead)
     }
 
+    const { startCall } = useVoipStore()
+    function handlePhoneClick(lead: DealLead) {
+        if (!lead.phone) return
+        startCall(lead.phone, lead.name, enterpriseId)
+    }
+
     function handleCreateStage() {
         if (!addStageName.trim() || !enterpriseId || !pipeline) return
         createStage.mutate(
@@ -2583,6 +2598,7 @@ export default function PipelinePage() {
                                 filters={filters}
                                 isBilateral={pipeline.isBilateral}
                                 onWhatsappClick={handleWhatsappClick}
+                                onPhoneClick={handlePhoneClick}
                                 cardFields={cardFields}
                             />
                         ))}

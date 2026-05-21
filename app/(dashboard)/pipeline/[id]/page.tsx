@@ -24,7 +24,7 @@ import {
     MessageCircle, ChevronDown, Trash2, ArrowLeft, UserPlus,
     Pencil, Trophy, XCircle, User, Send, X, Check, WifiOff,
     Package, LayoutGrid, Clock, Settings2, Trash,
-    AlertCircle, Copy, Link2, ArrowLeftRight, Zap,
+    AlertCircle, Copy, Link2, ArrowLeftRight, Zap, Phone,
 } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
@@ -378,13 +378,25 @@ function DealCardBody({
                         </span>
                     )}
                     {deal.lead.phone && (
-                        <button
-                            className="p-1 rounded hover:bg-muted transition-colors text-green-600"
-                            onPointerDown={(e) => e.stopPropagation()}
-                            onClick={() => onWhatsappClick?.(deal.lead)}
-                        >
-                            <MessageCircle className="size-3.5" />
-                        </button>
+                        <>
+                            <button
+                                className="p-1 rounded hover:bg-muted transition-colors text-green-600"
+                                title={`WhatsApp: ${deal.lead.phone}`}
+                                onPointerDown={(e) => e.stopPropagation()}
+                                onClick={() => onWhatsappClick?.(deal.lead)}
+                            >
+                                <MessageCircle className="size-3.5" />
+                            </button>
+                            <a
+                                href={`tel:${deal.lead.phone}`}
+                                className="p-1 rounded hover:bg-muted transition-colors text-blue-500"
+                                title={`Ligar: ${deal.lead.phone}`}
+                                onPointerDown={(e) => e.stopPropagation()}
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                <Phone className="size-3.5" />
+                            </a>
+                        </>
                     )}
                     <Popover open={tagPickerOpen} onOpenChange={setTagPickerOpen}>
                         <PopoverTrigger asChild>

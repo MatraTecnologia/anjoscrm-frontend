@@ -67,6 +67,7 @@ export function useVoipCall(onCallSid?: (sid: string) => void): UseVoipCallRetur
     const deviceRef = useRef<import('@twilio/voice-sdk').Device | null>(null)
     const callRef = useRef<import('@twilio/voice-sdk').Call | null>(null)
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+    const isMutedRef = useRef(false)
 
     function clearTimer() {
         if (timerRef.current) {
@@ -87,11 +88,14 @@ export function useVoipCall(onCallSid?: (sid: string) => void): UseVoipCallRetur
     }, [])
 
     const hangup = useCallback(() => {
-        try { callRef.current?.disconnect() } catch { /* ignora */ }
-        try { deviceRef.current?.destroy() } catch { /* ignora */ }
-        deviceRef.current = null
+        const call = callRef.current
+        const device = deviceRef.current
         callRef.current = null
+        deviceRef.current = null
+        try { call?.disconnect() } catch { /* ignora */ }
+        try { device?.destroy() } catch { /* ignora */ }
         clearTimer()
+        isMutedRef.current = false
         setStatus('ended')
         setIsMuted(false)
         setCallSid(null)
@@ -99,15 +103,17 @@ export function useVoipCall(onCallSid?: (sid: string) => void): UseVoipCallRetur
 
     const toggleMute = useCallback(() => {
         if (!callRef.current) return
-        const next = !isMuted
+        const next = !isMutedRef.current
+        isMutedRef.current = next
         callRef.current.mute(next)
         setIsMuted(next)
-    }, [isMuted])
+    }, [])
 
     const startCall = useCallback(async (phone: string, enterpriseId: string) => {
         try {
             setStatus('connecting')
             setError(null)
+            isMutedRef.current = false
             setIsMuted(false)
 
             // Lazy import — @twilio/voice-sdk só roda no browser

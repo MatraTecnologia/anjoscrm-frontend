@@ -34,9 +34,7 @@ const navItems = [
     { href: '/pipeline', icon: Filter, label: 'Funil' },
     { href: '/leads', icon: Users, label: 'Leads' },
     { href: '/chat', icon: MessageCircle, label: 'Chat' },
-    { href: '/ia', icon: Bot, label: 'Minhas IAs' },
-    { href: '/automacoes', icon: Zap, label: 'Automações' },
-]
+    { href: '/ia', icon: Bot, label: 'Minhas IAs' }]
 
 const bottomItems = [
     { href: '/agenda', icon: Calendar, label: 'Agenda' },

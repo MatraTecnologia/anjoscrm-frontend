@@ -872,7 +872,7 @@ function DealActivitiesTab({ dealId, leadId, enterpriseId }: { dealId: string; l
             {dealActivities.map(a => (
                 <div key={a.id} className="flex items-start gap-3 rounded-lg border p-3">
                     <button
-                        onClick={() => toggle({ id: a.id, enterpriseId, completed: !a.completed })}
+                        onClick={() => toggle({ id: a.id, enterpriseId, leadId, completed: !a.completed })}
                         className="mt-0.5 shrink-0"
                     >
                         {a.completed

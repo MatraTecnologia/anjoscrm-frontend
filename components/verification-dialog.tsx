@@ -1,13 +1,20 @@
 'use client'
 
-import { useRef, useState, useCallback, useEffect } from 'react'
-import { Camera, Copy, Check, RefreshCw, Loader2, Link2, FileText, FlipHorizontal, User, ChevronRight } from 'lucide-react'
+import { useState, useCallback } from 'react'
+import { Copy, Check, Loader2, Link2, FileText, ChevronRight, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { useAnalyzeDocument, useGenerateVerificationLink, type DocumentType, type DocumentVerificationResult, type ExtractedDocumentData } from '@/services/verification'
+import {
+    useAnalyzeDocument,
+    useGenerateVerificationLink,
+    type DocumentType,
+    type DocumentVerificationResult,
+    type ExtractedDocumentData,
+} from '@/services/verification'
+import { CameraView } from '@/components/camera-view'
 
 type Props = {
     leadId: string
@@ -26,10 +33,6 @@ const DOC_OPTIONS: { value: DocumentType; label: string; hasBack: boolean }[] = 
 ]
 
 export function VerificationDialog({ leadId, enterpriseId, open, onOpenChange }: Props) {
-    const videoRef = useRef<HTMLVideoElement>(null)
-    const canvasRef = useRef<HTMLCanvasElement>(null)
-    const streamRef = useRef<MediaStream | null>(null)
-
     const [step, setStep] = useState<Step>('select_doc')
     const [selectedDoc, setSelectedDoc] = useState<DocumentType>('RG')
     const [frontImage, setFrontImage] = useState<string | null>(null)
@@ -41,65 +44,36 @@ export function VerificationDialog({ leadId, enterpriseId, open, onOpenChange }:
     const analyzeDocument = useAnalyzeDocument(leadId, enterpriseId)
     const generateLink = useGenerateVerificationLink(leadId, enterpriseId)
 
-    const stopCamera = useCallback(() => {
-        streamRef.current?.getTracks().forEach(t => t.stop())
-        streamRef.current = null
+    const docHasBack = DOC_OPTIONS.find(d => d.value === selectedDoc)?.hasBack ?? false
+    const totalSteps = docHasBack ? 3 : 2
+
+    const reset = useCallback(() => {
+        setStep('select_doc')
+        setFrontImage(null)
+        setBackImage(null)
+        setResult(null)
     }, [])
 
-    const startCamera = useCallback(async (nextStep: 'camera_front' | 'camera_back' | 'camera_selfie') => {
-        try {
-            stopCamera()
-            const facingMode = nextStep === 'camera_selfie' ? 'user' : 'environment'
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode } })
-            streamRef.current = stream
-            setStep(nextStep)
-        } catch {
-            toast.error('Não foi possível acessar a câmera.')
-        }
-    }, [stopCamera])
+    const handleOpenChange = useCallback((v: boolean) => {
+        if (!v) reset()
+        onOpenChange(v)
+    }, [reset, onOpenChange])
 
-    useEffect(() => {
-        const cameraSteps: Step[] = ['camera_front', 'camera_back', 'camera_selfie']
-        if (cameraSteps.includes(step) && videoRef.current && streamRef.current) {
-            videoRef.current.srcObject = streamRef.current
-        }
-    }, [step])
-
-    const capture = useCallback((): string | null => {
-        if (!videoRef.current || !canvasRef.current) return null
-        const video = videoRef.current
-        const canvas = canvasRef.current
-        canvas.width = video.videoWidth
-        canvas.height = video.videoHeight
-        canvas.getContext('2d')?.drawImage(video, 0, 0)
-        return canvas.toDataURL('image/jpeg', 0.9)
-    }, [])
-
-    const handleCaptureFront = useCallback(() => {
-        const img = capture()
-        if (!img) return
+    const handleCaptureFront = useCallback((img: string) => {
         setFrontImage(img)
-        stopCamera()
         const doc = DOC_OPTIONS.find(d => d.value === selectedDoc)
-        startCamera(doc?.hasBack ? 'camera_back' : 'camera_selfie')
-    }, [capture, stopCamera, selectedDoc, startCamera])
+        setStep(doc?.hasBack ? 'camera_back' : 'camera_selfie')
+    }, [selectedDoc])
 
-    const handleCaptureBack = useCallback(() => {
-        const img = capture()
-        if (!img) return
+    const handleCaptureBack = useCallback((img: string) => {
         setBackImage(img)
-        stopCamera()
-        startCamera('camera_selfie')
-    }, [capture, stopCamera, startCamera])
+        setStep('camera_selfie')
+    }, [])
 
-    const handleCaptureSelfie = useCallback(() => {
-        const img = capture()
-        if (!img) return
-        stopCamera()
+    const handleCaptureSelfie = useCallback((selfie: string) => {
         setStep('analyzing')
-
         analyzeDocument.mutate(
-            { documentType: selectedDoc, frontImage: frontImage!, backImage: backImage ?? undefined, selfieImage: img },
+            { documentType: selectedDoc, frontImage: frontImage!, backImage: backImage ?? undefined, selfieImage: selfie },
             {
                 onSuccess: (res) => { setResult(res); setStep('result') },
                 onError: (err: unknown) => {
@@ -109,20 +83,7 @@ export function VerificationDialog({ leadId, enterpriseId, open, onOpenChange }:
                 },
             },
         )
-    }, [capture, stopCamera, analyzeDocument, selectedDoc, frontImage, backImage])
-
-    const reset = useCallback(() => {
-        stopCamera()
-        setStep('select_doc')
-        setFrontImage(null)
-        setBackImage(null)
-        setResult(null)
-    }, [stopCamera])
-
-    const handleOpenChange = useCallback((v: boolean) => {
-        if (!v) reset()
-        onOpenChange(v)
-    }, [reset, onOpenChange])
+    }, [analyzeDocument, selectedDoc, frontImage, backImage])
 
     const handleGenerateLink = useCallback(() => {
         generateLink.mutate(undefined, {
@@ -139,10 +100,6 @@ export function VerificationDialog({ leadId, enterpriseId, open, onOpenChange }:
         })
     }, [generatedLink])
 
-    const docHasBack = DOC_OPTIONS.find(d => d.value === selectedDoc)?.hasBack ?? false
-    const totalSteps = docHasBack ? 3 : 2
-    const currentStep = step === 'camera_front' ? 1 : step === 'camera_back' ? 2 : step === 'camera_selfie' ? totalSteps : 0
-
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
             <DialogContent className="max-w-md">
@@ -150,19 +107,15 @@ export function VerificationDialog({ leadId, enterpriseId, open, onOpenChange }:
                     <DialogTitle>Verificação de Identidade</DialogTitle>
                 </DialogHeader>
 
-                <Tabs
-                    defaultValue="document"
-                    onValueChange={() => { reset(); setGeneratedLink(null) }}
-                >
+                <Tabs defaultValue="document" onValueChange={() => { reset(); setGeneratedLink(null) }}>
                     <TabsList className="w-full">
                         <TabsTrigger value="document" className="flex-1">Câmera</TabsTrigger>
                         <TabsTrigger value="link" className="flex-1">Link para o lead</TabsTrigger>
                     </TabsList>
 
-                    {/* Tab documento + selfie */}
+                    {/* ── Tab câmera ── */}
                     <TabsContent value="document" className="mt-4 flex flex-col gap-4">
 
-                        {/* Seleção de documento */}
                         {step === 'select_doc' && (
                             <div className="flex flex-col gap-3">
                                 <p className="text-sm text-muted-foreground">Escolha o tipo de documento do lead.</p>
@@ -171,10 +124,7 @@ export function VerificationDialog({ leadId, enterpriseId, open, onOpenChange }:
                                         <button
                                             key={doc.value}
                                             onClick={() => setSelectedDoc(doc.value)}
-                                            className={`flex items-center justify-between p-3 rounded-lg border transition-colors text-left ${selectedDoc === doc.value
-                                                ? 'border-primary bg-primary/5'
-                                                : 'border-border hover:border-muted-foreground'
-                                                }`}
+                                            className={`flex items-center justify-between p-3 rounded-lg border transition-colors text-left ${selectedDoc === doc.value ? 'border-primary bg-primary/5' : 'border-border hover:border-muted-foreground'}`}
                                         >
                                             <div className="flex items-center gap-2.5">
                                                 <FileText className={`size-4 ${selectedDoc === doc.value ? 'text-primary' : 'text-muted-foreground'}`} />
@@ -187,96 +137,73 @@ export function VerificationDialog({ leadId, enterpriseId, open, onOpenChange }:
                                         </button>
                                     ))}
                                 </div>
-                                <Button onClick={() => startCamera('camera_front')} className="gap-2">
-                                    <Camera className="size-4" />
+                                <Button onClick={() => setStep('camera_front')} className="gap-2">
                                     Iniciar verificação
                                 </Button>
                             </div>
                         )}
 
-                        {/* Câmeras */}
-                        {(step === 'camera_front' || step === 'camera_back' || step === 'camera_selfie') && (
-                            <div className="flex flex-col gap-3">
-                                {/* Barra de progresso */}
-                                <div className="flex gap-1.5">
-                                    {Array.from({ length: totalSteps }).map((_, i) => (
-                                        <div key={i} className={`h-1 flex-1 rounded-full ${i < currentStep ? 'bg-primary' : 'bg-muted'}`} />
-                                    ))}
-                                </div>
-
-                                <div className="flex items-center gap-2">
-                                    {step === 'camera_front' && <><FileText className="size-4 text-primary" /><span className="text-sm font-medium">Frente do documento</span></>}
-                                    {step === 'camera_back' && <><FlipHorizontal className="size-4 text-primary" /><span className="text-sm font-medium">Verso do documento</span></>}
-                                    {step === 'camera_selfie' && <><User className="size-4 text-primary" /><span className="text-sm font-medium">Selfie</span></>}
-                                    <span className="text-xs text-muted-foreground ml-auto">{currentStep}/{totalSteps}</span>
-                                </div>
-
-                                <div className="relative rounded-lg overflow-hidden bg-black aspect-video">
-                                    <video
-                                        ref={videoRef}
-                                        autoPlay
-                                        playsInline
-                                        className="w-full h-full object-cover"
-                                        style={step === 'camera_selfie' ? { transform: 'scaleX(-1)' } : undefined}
-                                    />
-                                    <div className="absolute inset-3 border border-white/30 rounded pointer-events-none" />
-                                </div>
-
-                                <p className="text-xs text-muted-foreground text-center">
-                                    {step === 'camera_front' && 'Enquadre a frente do documento — garanta boa iluminação e sem reflexos'}
-                                    {step === 'camera_back' && 'Vire o documento e enquadre o verso'}
-                                    {step === 'camera_selfie' && 'Olhe diretamente para a câmera com rosto bem iluminado'}
-                                </p>
-
-                                <div className="flex gap-2">
-                                    <Button variant="outline" size="sm" onClick={reset} className="flex-shrink-0">
-                                        Cancelar
-                                    </Button>
-                                    <Button
-                                        className="flex-1 gap-2"
-                                        onClick={step === 'camera_front' ? handleCaptureFront : step === 'camera_back' ? handleCaptureBack : handleCaptureSelfie}
-                                    >
-                                        <Camera className="size-4" />
-                                        Capturar
-                                    </Button>
-                                </div>
-                            </div>
+                        {step === 'camera_front' && (
+                            <CameraView
+                                mode="document"
+                                label="Frente do documento"
+                                hint="Enquadre a frente — sem reflexos, todo o documento visível"
+                                step={1}
+                                totalSteps={totalSteps}
+                                onCapture={handleCaptureFront}
+                                onError={(msg) => toast.error(msg)}
+                                aspectRatio="4/3"
+                            />
                         )}
 
-                        {/* Analisando */}
+                        {step === 'camera_back' && (
+                            <CameraView
+                                mode="document"
+                                label="Verso do documento"
+                                hint="Vire o documento e enquadre o verso completamente"
+                                step={2}
+                                totalSteps={totalSteps}
+                                onCapture={handleCaptureBack}
+                                onError={(msg) => toast.error(msg)}
+                                aspectRatio="4/3"
+                            />
+                        )}
+
+                        {step === 'camera_selfie' && (
+                            <CameraView
+                                mode="selfie"
+                                label="Selfie"
+                                hint="Olhe diretamente para a câmera com rosto bem iluminado"
+                                step={totalSteps}
+                                totalSteps={totalSteps}
+                                onCapture={handleCaptureSelfie}
+                                onError={(msg) => toast.error(msg)}
+                                aspectRatio="3/4"
+                            />
+                        )}
+
                         {step === 'analyzing' && (
                             <div className="flex flex-col items-center gap-3 py-8">
                                 <Loader2 className="size-8 animate-spin text-primary" />
-                                <p className="text-sm text-muted-foreground">Verificando documentos com IA...</p>
+                                <p className="text-sm text-muted-foreground">Verificando com IA...</p>
                             </div>
                         )}
 
-                        {/* Resultado */}
                         {step === 'result' && result && (
                             <div className="flex flex-col gap-3">
-                                <div className={`flex flex-col items-center gap-2 p-4 rounded-lg border text-center ${result.overallStatus === 'aprovado'
-                                    ? 'border-green-500/40 bg-green-500/10'
-                                    : result.overallStatus === 'inconclusivo'
-                                        ? 'border-yellow-500/40 bg-yellow-500/10'
-                                        : 'border-red-500/40 bg-red-500/10'
-                                    }`}>
+                                <div className={`flex flex-col items-center gap-2 p-4 rounded-lg border text-center ${result.overallStatus === 'aprovado' ? 'border-green-500/40 bg-green-500/10' : result.overallStatus === 'inconclusivo' ? 'border-yellow-500/40 bg-yellow-500/10' : 'border-red-500/40 bg-red-500/10'}`}>
                                     <p className={`text-base font-semibold ${result.overallStatus === 'aprovado' ? 'text-green-600' : result.overallStatus === 'inconclusivo' ? 'text-yellow-600' : 'text-red-600'}`}>
                                         {result.overallStatus === 'aprovado' ? '✓ Identidade verificada' : result.overallStatus === 'inconclusivo' ? '⚠ Inconclusivo' : '✗ Não aprovado'}
                                     </p>
                                     <p className="text-xs text-muted-foreground">{result.authenticityReason}</p>
                                 </div>
 
-                                {/* Dados extraídos */}
                                 {result.extractedData && Object.values(result.extractedData).some(Boolean) && (
                                     <div className="rounded-lg border p-3 flex flex-col gap-1.5">
                                         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Dados do documento</p>
                                         {([
-                                            ['name', 'Nome'],
-                                            ['cpf', 'CPF'],
-                                            ['rg', 'RG'],
-                                            ['birthDate', 'Nascimento'],
-                                            ['documentNumber', 'Nº Documento'],
-                                            ['expiresAt', 'Validade'],
+                                            ['name', 'Nome'], ['cpf', 'CPF'], ['rg', 'RG'],
+                                            ['birthDate', 'Nascimento'], ['documentNumber', 'Nº Documento'], ['expiresAt', 'Validade'],
                                         ] as [keyof ExtractedDocumentData, string][]).map(([key, label]) => {
                                             const val = result.extractedData[key]
                                             if (!val) return null
@@ -290,7 +217,6 @@ export function VerificationDialog({ leadId, enterpriseId, open, onOpenChange }:
                                     </div>
                                 )}
 
-                                {/* Pontuações */}
                                 <div className="rounded-lg border p-3 flex flex-col gap-1.5">
                                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Pontuações</p>
                                     <ScoreRow label="Autenticidade" score={result.authenticityScore} status={result.authenticityStatus} />
@@ -305,11 +231,9 @@ export function VerificationDialog({ leadId, enterpriseId, open, onOpenChange }:
                                 </Button>
                             </div>
                         )}
-
-                        <canvas ref={canvasRef} className="hidden" />
                     </TabsContent>
 
-                    {/* Tab link */}
+                    {/* ── Tab link ── */}
                     <TabsContent value="link" className="mt-4 flex flex-col gap-4">
                         <div className="flex flex-col items-center gap-4 py-4">
                             <div className="size-16 rounded-full bg-muted flex items-center justify-center">

@@ -17,7 +17,7 @@ type Props = {
     onOpenChange: (v: boolean) => void
 }
 
-export function VerificationDialog({ leadId, open, onOpenChange }: Props) {
+export function VerificationDialog({ leadId, enterpriseId, open, onOpenChange }: Props) {
     const videoRef = useRef<HTMLVideoElement>(null)
     const canvasRef = useRef<HTMLCanvasElement>(null)
     const streamRef = useRef<MediaStream | null>(null)
@@ -28,8 +28,8 @@ export function VerificationDialog({ leadId, open, onOpenChange }: Props) {
     const [generatedLink, setGeneratedLink] = useState<string | null>(null)
     const [copied, setCopied] = useState(false)
 
-    const analyzeFace = useAnalyzeFace(leadId)
-    const generateLink = useGenerateVerificationLink(leadId)
+    const analyzeFace = useAnalyzeFace(leadId, enterpriseId)
+    const generateLink = useGenerateVerificationLink(leadId, enterpriseId)
 
     const startCamera = useCallback(async () => {
         try {

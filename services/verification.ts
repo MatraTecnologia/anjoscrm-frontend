@@ -27,20 +27,27 @@ export type VerificationTokenInfo = {
 
 async function analyzeFaceFn({
     leadId,
+    enterpriseId,
     image,
 }: {
     leadId: string
+    enterpriseId: string
     image: string
 }): Promise<VerificationResult> {
     const { data } = await api.post<VerificationResult>(
         `/leads/${leadId}/verification/analyze`,
         { image },
+        { headers: { 'X-Enterprise-Id': enterpriseId } },
     )
     return data
 }
 
-async function generateLinkFn(leadId: string): Promise<VerificationLink> {
-    const { data } = await api.post<VerificationLink>(`/leads/${leadId}/verification/link`)
+async function generateLinkFn(leadId: string, enterpriseId: string): Promise<VerificationLink> {
+    const { data } = await api.post<VerificationLink>(
+        `/leads/${leadId}/verification/link`,
+        undefined,
+        { headers: { 'X-Enterprise-Id': enterpriseId } },
+    )
     return data
 }
 
@@ -65,19 +72,19 @@ async function completeVerificationFn({
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────
 
-export function useAnalyzeFace(leadId: string) {
+export function useAnalyzeFace(leadId: string, enterpriseId: string) {
     const queryClient = useQueryClient()
     return useMutation({
-        mutationFn: (image: string) => analyzeFaceFn({ leadId, image }),
+        mutationFn: (image: string) => analyzeFaceFn({ leadId, enterpriseId, image }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: keys.leads.detail(leadId) })
         },
     })
 }
 
-export function useGenerateVerificationLink(leadId: string) {
+export function useGenerateVerificationLink(leadId: string, enterpriseId: string) {
     return useMutation({
-        mutationFn: () => generateLinkFn(leadId),
+        mutationFn: () => generateLinkFn(leadId, enterpriseId),
     })
 }
 

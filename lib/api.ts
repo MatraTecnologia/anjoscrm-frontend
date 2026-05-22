@@ -2,10 +2,11 @@ import axios from 'axios'
 
 export const api = axios.create({
     baseURL: process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3333',
-    withCredentials: true, // necessário para cookies de sessão do Better Auth
+    withCredentials: true,
+    timeout: 120_000, // 2min — GPT-4o Vision pode demorar com imagens grandes
     headers: {
         'Content-Type': 'application/json',
-        'ngrok-skip-browser-warning': 'true', // ignora a página de aviso do ngrok gratuito
+        'ngrok-skip-browser-warning': 'true',
     },
 })
 

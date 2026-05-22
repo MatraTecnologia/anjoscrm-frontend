@@ -165,15 +165,20 @@ export function CameraView({ mode, label, hint, step, totalSteps, onCapture, onE
         const video = videoRef.current
         const canvas = canvasRef.current
         if (!video || !canvas) return
-        canvas.width = video.videoWidth
-        canvas.height = video.videoHeight
+
+        // Reduz para no máximo 800px de largura para não estourar o payload
+        const MAX_W = 800
+        const scale = Math.min(1, MAX_W / video.videoWidth)
+        canvas.width = Math.round(video.videoWidth * scale)
+        canvas.height = Math.round(video.videoHeight * scale)
+
         const ctx = canvas.getContext('2d')!
         if (facing === 'user') {
             ctx.translate(canvas.width, 0)
             ctx.scale(-1, 1)
         }
-        ctx.drawImage(video, 0, 0)
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.92)
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.82)
         stopCamera()
         onCapture(dataUrl)
     }, [facing, stopCamera, onCapture])

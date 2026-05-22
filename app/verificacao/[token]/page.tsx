@@ -71,8 +71,7 @@ export default function VerificacaoPage() {
             {
                 onSuccess: (res) => { setResult(res); setPageState('result') },
                 onError: (err: unknown) => {
-                    const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? 'Erro ao analisar documentos.'
-                    setErrorMessage(msg)
+                    setErrorMessage((err as Error).message ?? 'Erro ao analisar documentos.')
                     setPageState('error')
                 },
             },

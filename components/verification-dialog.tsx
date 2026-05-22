@@ -77,8 +77,7 @@ export function VerificationDialog({ leadId, enterpriseId, open, onOpenChange }:
             {
                 onSuccess: (res) => { setResult(res); setStep('result') },
                 onError: (err: unknown) => {
-                    const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? 'Erro ao analisar.'
-                    toast.error(msg)
+                    toast.error((err as Error).message ?? 'Erro ao analisar.')
                     setStep('select_doc')
                 },
             },

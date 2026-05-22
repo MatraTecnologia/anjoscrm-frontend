@@ -38,13 +38,18 @@ export default function VerificacaoPage() {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
             streamRef.current = stream
-            if (videoRef.current) videoRef.current.srcObject = stream
             setPageState('camera')
         } catch {
             setErrorMessage('Não foi possível acessar a câmera. Verifique as permissões.')
             setPageState('error')
         }
     }, [])
+
+    useEffect(() => {
+        if (pageState === 'camera' && videoRef.current && streamRef.current) {
+            videoRef.current.srcObject = streamRef.current
+        }
+    }, [pageState])
 
     const capturePhoto = useCallback(() => {
         if (!videoRef.current || !canvasRef.current) return

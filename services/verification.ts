@@ -23,6 +23,33 @@ export type VerificationTokenInfo = {
     leadName: string
 }
 
+export type DocumentType = 'RG' | 'CNH' | 'PASSAPORTE' | 'RNE'
+
+export type ExtractedDocumentData = {
+    name?: string
+    cpf?: string
+    rg?: string
+    birthDate?: string
+    expiresAt?: string
+    documentNumber?: string
+    fatherName?: string
+    motherName?: string
+    nationality?: string
+    issuedBy?: string
+    issuedAt?: string
+}
+
+export type DocumentVerificationResult = {
+    authenticityStatus: 'aprovado' | 'reprovado' | 'inconclusivo'
+    authenticityScore: number
+    authenticityReason: string
+    extractedData: ExtractedDocumentData
+    faceMatchStatus?: 'aprovado' | 'reprovado' | 'inconclusivo'
+    faceMatchScore?: number
+    faceMatchReason?: string
+    overallStatus: 'aprovado' | 'reprovado' | 'inconclusivo'
+}
+
 // ─── API ─────────────────────────────────────────────────────────────────────
 
 async function analyzeFaceFn({
@@ -70,6 +97,49 @@ async function completeVerificationFn({
     return data
 }
 
+async function analyzeDocumentFn({
+    leadId,
+    enterpriseId,
+    documentType,
+    frontImage,
+    backImage,
+    selfieImage,
+}: {
+    leadId: string
+    enterpriseId: string
+    documentType: DocumentType
+    frontImage: string
+    backImage?: string
+    selfieImage?: string
+}): Promise<DocumentVerificationResult> {
+    const { data } = await api.post<DocumentVerificationResult>(
+        `/leads/${leadId}/verification/document`,
+        { documentType, frontImage, backImage, selfieImage },
+        { headers: { 'X-Enterprise-Id': enterpriseId } },
+    )
+    return data
+}
+
+async function analyzeDocumentByTokenFn({
+    token,
+    documentType,
+    frontImage,
+    backImage,
+    selfieImage,
+}: {
+    token: string
+    documentType: DocumentType
+    frontImage: string
+    backImage?: string
+    selfieImage?: string
+}): Promise<DocumentVerificationResult> {
+    const { data } = await api.post<DocumentVerificationResult>(
+        `/leads/verification/${token}/document`,
+        { documentType, frontImage, backImage, selfieImage },
+    )
+    return data
+}
+
 // ─── Hooks ────────────────────────────────────────────────────────────────────
 
 export function useAnalyzeFace(leadId: string, enterpriseId: string) {
@@ -91,6 +161,24 @@ export function useGenerateVerificationLink(leadId: string, enterpriseId: string
 export function useCompleteVerification(token: string) {
     return useMutation({
         mutationFn: (image: string) => completeVerificationFn({ token, image }),
+    })
+}
+
+export function useAnalyzeDocument(leadId: string, enterpriseId: string) {
+    const queryClient = useQueryClient()
+    return useMutation({
+        mutationFn: (payload: { documentType: DocumentType; frontImage: string; backImage?: string; selfieImage?: string }) =>
+            analyzeDocumentFn({ leadId, enterpriseId, ...payload }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: keys.leads.detail(leadId) })
+        },
+    })
+}
+
+export function useAnalyzeDocumentByToken(token: string) {
+    return useMutation({
+        mutationFn: (payload: { documentType: DocumentType; frontImage: string; backImage?: string; selfieImage?: string }) =>
+            analyzeDocumentByTokenFn({ token, ...payload }),
     })
 }
 

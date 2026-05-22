@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, useCallback } from 'react'
+import { useRef, useState, useCallback, useEffect } from 'react'
 import { Camera, Copy, Check, RefreshCw, Loader2, Link2 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -35,14 +35,17 @@ export function VerificationDialog({ leadId, enterpriseId, open, onOpenChange }:
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
             streamRef.current = stream
-            if (videoRef.current) {
-                videoRef.current.srcObject = stream
-            }
             setCameraActive(true)
         } catch {
             toast.error('Não foi possível acessar a câmera.')
         }
     }, [])
+
+    useEffect(() => {
+        if (cameraActive && videoRef.current && streamRef.current) {
+            videoRef.current.srcObject = streamRef.current
+        }
+    }, [cameraActive])
 
     const stopCamera = useCallback(() => {
         streamRef.current?.getTracks().forEach(t => t.stop())

@@ -38,6 +38,18 @@ export type Lead = {
     cidade: string | null
     uf: string | null
     pais: string | null
+    // Dados pessoais
+    dataNascimento: string | null
+    sexo: string | null
+    rg: string | null
+    rgOrgaoEmissor: string | null
+    nomeMae: string | null
+    estadoCivil: string | null
+    nacionalidade: string | null
+    // Verificação facial
+    verificacaoStatus: string | null
+    verificacaoScore: number | null
+    verificacaoData: string | null
     tags: Tag[]
     createdAt: string
     updatedAt: string
@@ -77,6 +89,14 @@ export type UpdateLeadPayload = {
     cidade?: string | null
     uf?: string | null
     pais?: string | null
+    // Dados pessoais
+    dataNascimento?: string | null
+    sexo?: string | null
+    rg?: string | null
+    rgOrgaoEmissor?: string | null
+    nomeMae?: string | null
+    estadoCivil?: string | null
+    nacionalidade?: string | null
     tagIds?: string[]
 }
 

@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import {
     Plus, Globe, Trash2, WifiOff, QrCode, RefreshCw, Loader2,
     Check, Wifi, Webhook, Phone, Zap, ShieldCheck, Clock,
-    CreditCard, ExternalLink, MessageSquare, Sparkles, ArrowRight,
+    ExternalLink, MessageSquare, ArrowRight,
     AlertCircle, Ban,
 } from 'lucide-react'
 
@@ -308,22 +308,13 @@ function WhatsappPurchaseCard({
 
     function handlePurchase() {
         create({ enterpriseId, label: label.trim() || 'WhatsApp Principal' }, {
-            onSuccess: (data) => {
-                if (data.paymentUrl) {
-                    window.open(data.paymentUrl, '_blank', 'noopener,noreferrer')
-                    toast.success('Redirecionando para o pagamento. Após confirmar, sua linha será ativada automaticamente.')
-                } else {
-                    toast.info('Assinatura criada! Aguarde a confirmação do pagamento.')
-                }
+            onSuccess: () => {
+                toast.success('Linha WhatsApp criada! Escaneie o QR Code para conectar.')
                 onSuccess()
             },
             onError: (err: unknown) => {
-                const apiErr = (err as { response?: { data?: { error?: string; code?: string } } })?.response?.data
-                if (apiErr?.code === 'MISSING_DOCUMENT') {
-                    toast.error('CPF/CNPJ da empresa não preenchido. Acesse Configurações → Empresa para preencher antes de assinar.', { duration: 8000 })
-                } else {
-                    toast.error(apiErr?.error ?? (err as Error).message ?? 'Erro ao criar assinatura.')
-                }
+                const apiErr = (err as { response?: { data?: { error?: string } } })?.response?.data
+                toast.error(apiErr?.error ?? (err as Error).message ?? 'Erro ao criar conexão.')
             },
         })
     }
@@ -350,22 +341,15 @@ function WhatsappPurchaseCard({
                         <div>
                             <div className="flex items-center gap-2">
                                 <p className="font-semibold text-base">Linha WhatsApp</p>
-                                <Badge className="gap-1 bg-green-500/10 text-green-600 border-green-500/20 text-[11px] px-1.5">
-                                    <Sparkles className="size-2.5" />
-                                    Recomendado
-                                </Badge>
                             </div>
                             <p className="text-sm text-muted-foreground mt-0.5">Canal conversacional completo</p>
                         </div>
                     </div>
 
-                    {/* Pricing */}
-                    <div className="text-right shrink-0">
-                        <div className="flex items-baseline gap-0.5 justify-end">
-                            <span className="text-xs text-muted-foreground">R$</span>
-                            <span className="text-3xl font-bold tabular-nums">97</span>
-                        </div>
-                        <p className="text-xs text-muted-foreground">/mês por linha</p>
+                    <div className="shrink-0">
+                        <Badge className="gap-1 bg-green-500/10 text-green-600 border-green-500/20 text-[11px] px-1.5">
+                            Gratuito
+                        </Badge>
                     </div>
                 </div>
 
@@ -412,19 +396,15 @@ function WhatsappPurchaseCard({
                     disabled={isPending}
                 >
                     {isPending ? (
-                        <><Loader2 className="size-4 animate-spin" /> Processando...</>
+                        <><Loader2 className="size-4 animate-spin" /> Conectando...</>
                     ) : (
                         <>
-                            <CreditCard className="size-4" />
-                            Assinar agora — R$ 97/mês
+                            <WhatsAppIcon className="size-4" />
+                            Conectar WhatsApp
                             <ArrowRight className="size-4 ml-auto" />
                         </>
                     )}
                 </Button>
-
-                <p className="text-[11px] text-muted-foreground text-center leading-relaxed">
-                    Cobrança recorrente via Pix, boleto ou cartão · Cancele quando quiser
-                </p>
             </div>
         </div>
     )
@@ -1239,7 +1219,7 @@ export default function ConnectionsPage() {
                             </div>
                             <h2 className="text-lg font-semibold">Conecte seu WhatsApp</h2>
                             <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">
-                                Ative uma linha WhatsApp e comece a atender seus clientes diretamente pela plataforma,
+                                Conecte seu WhatsApp gratuitamente e comece a atender seus clientes diretamente pela plataforma,
                                 com IA, automações e CRM integrados.
                             </p>
                         </div>

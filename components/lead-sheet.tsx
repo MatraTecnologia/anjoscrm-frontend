@@ -11,7 +11,7 @@ import {
     SlidersHorizontal, MessageSquarePlus, Send, Tag,
     ShoppingCart, MoreHorizontal, Check, Clock, X,
     Camera, Copy, ExternalLink, Calendar, CheckCircle2, Circle,
-    Activity as ActivityIcon, Phone,
+    Activity as ActivityIcon, Phone, Shield, ShieldCheck, ShieldX, ShieldAlert,
 } from 'lucide-react'
 import type { Value as PhoneValue } from 'react-phone-number-input'
 import Cropper from 'react-easy-crop'
@@ -42,6 +42,7 @@ import { useMembers } from '@/services/enterprises'
 import { useListLeadAuditLogs, useAddLeadComment, ACTION_LABELS, type AuditLog } from '@/services/audit'
 import { useLeadDeals, useListDealProducts, type DealWithPipeline, type DealProduct } from '@/services/deals'
 import { useLeadCustomFieldValues, useSaveLeadCustomFieldValues, useDealCustomFieldValues, useSaveDealCustomFieldValues, type CustomFieldWithValue } from '@/services/custom-fields'
+import { VerificationDialog } from '@/components/verification-dialog'
 import { useLeadActivities, useCreateActivity, useUpdateActivity, useToggleActivityComplete, useDeleteActivity, type Activity } from '@/services/activities'
 import { useListActivityTypes } from '@/services/activity-types'
 
@@ -1611,6 +1612,16 @@ function LeadProfile({ lead, enterpriseId }: { lead: Lead; enterpriseId: string 
     const [ufVal, setUfVal] = useState(lead.uf ?? '')
     const [paisVal, setPaisVal] = useState(lead.pais ?? 'Brasil')
 
+    // Dados pessoais
+    const [dataNascimentoVal, setDataNascimentoVal] = useState(lead.dataNascimento ? lead.dataNascimento.slice(0, 10) : '')
+    const [sexoVal, setSexoVal] = useState(lead.sexo ?? '')
+    const [rgVal, setRgVal] = useState(lead.rg ?? '')
+    const [rgOrgaoEmissorVal, setRgOrgaoEmissorVal] = useState(lead.rgOrgaoEmissor ?? '')
+    const [nomeMaeVal, setNomeMaeVal] = useState(lead.nomeMae ?? '')
+    const [estadoCivilVal, setEstadoCivilVal] = useState(lead.estadoCivil ?? '')
+    const [nacionalidadeVal, setNacionalidadeVal] = useState(lead.nacionalidade ?? '')
+    const [verificationOpen, setVerificationOpen] = useState(false)
+
     const router = useRouter()
     const { startCall } = useVoipStore()
 
@@ -1649,6 +1660,13 @@ function LeadProfile({ lead, enterpriseId }: { lead: Lead; enterpriseId: string 
     useEffect(() => { setCidadeVal(lead.cidade ?? '') }, [lead.cidade])
     useEffect(() => { setUfVal(lead.uf ?? '') }, [lead.uf])
     useEffect(() => { setPaisVal(lead.pais ?? 'Brasil') }, [lead.pais])
+    useEffect(() => { setDataNascimentoVal(lead.dataNascimento ? lead.dataNascimento.slice(0, 10) : '') }, [lead.dataNascimento])
+    useEffect(() => { setSexoVal(lead.sexo ?? '') }, [lead.sexo])
+    useEffect(() => { setRgVal(lead.rg ?? '') }, [lead.rg])
+    useEffect(() => { setRgOrgaoEmissorVal(lead.rgOrgaoEmissor ?? '') }, [lead.rgOrgaoEmissor])
+    useEffect(() => { setNomeMaeVal(lead.nomeMae ?? '') }, [lead.nomeMae])
+    useEffect(() => { setEstadoCivilVal(lead.estadoCivil ?? '') }, [lead.estadoCivil])
+    useEffect(() => { setNacionalidadeVal(lead.nacionalidade ?? '') }, [lead.nacionalidade])
 
     function saveName() {
         const trimmed = nameValue.trim()
@@ -1756,6 +1774,33 @@ function LeadProfile({ lead, enterpriseId }: { lead: Lead; enterpriseId: string 
                         >
                             {lead.name}
                             <Pencil className="size-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </button>
+                    )}
+
+                    {/* Verification badge */}
+                    {lead.verificacaoStatus ? (
+                        <button
+                            onClick={() => setVerificationOpen(true)}
+                            className={cn(
+                                'flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full border transition-colors',
+                                lead.verificacaoStatus === 'aprovado' && 'border-green-500/40 text-green-600 bg-green-500/10 hover:bg-green-500/20',
+                                lead.verificacaoStatus === 'reprovado' && 'border-red-500/40 text-red-600 bg-red-500/10 hover:bg-red-500/20',
+                                lead.verificacaoStatus === 'pendente' && 'border-yellow-500/40 text-yellow-600 bg-yellow-500/10 hover:bg-yellow-500/20',
+                            )}
+                        >
+                            {lead.verificacaoStatus === 'aprovado' && <ShieldCheck className="size-3" />}
+                            {lead.verificacaoStatus === 'reprovado' && <ShieldX className="size-3" />}
+                            {lead.verificacaoStatus === 'pendente' && <ShieldAlert className="size-3" />}
+                            {lead.verificacaoStatus === 'aprovado' ? 'Verificado' : lead.verificacaoStatus === 'reprovado' ? 'Reprovado' : 'Pendente'}
+                            {lead.verificacaoScore != null && ` (${lead.verificacaoScore.toFixed(0)}%)`}
+                        </button>
+                    ) : (
+                        <button
+                            onClick={() => setVerificationOpen(true)}
+                            className="flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full border border-muted-foreground/30 text-muted-foreground hover:bg-muted/30 transition-colors"
+                        >
+                            <Shield className="size-3" />
+                            Não verificado
                         </button>
                     )}
 
@@ -2076,6 +2121,104 @@ function LeadProfile({ lead, enterpriseId }: { lead: Lead; enterpriseId: string 
                             />
                         </div>
 
+                        {/* Dados Pessoais */}
+                        <div className="pt-1 border-t border-border/50">
+                            <p className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wider mb-3">Dados Pessoais</p>
+                            <div className="flex flex-col gap-3.5">
+
+                                <div className="flex flex-col gap-0.5">
+                                    <label className="text-[11px] text-muted-foreground font-medium">Data de Nascimento</label>
+                                    <input
+                                        type="date"
+                                        value={dataNascimentoVal}
+                                        onChange={e => setDataNascimentoVal(e.target.value)}
+                                        onBlur={() => saveField('dataNascimento', dataNascimentoVal)}
+                                        className={inlineCls}
+                                    />
+                                </div>
+
+                                <div className="flex flex-col gap-0.5">
+                                    <label className="text-[11px] text-muted-foreground font-medium">Sexo</label>
+                                    <select
+                                        value={sexoVal}
+                                        onChange={e => { setSexoVal(e.target.value); saveField('sexo', e.target.value) }}
+                                        className={cn(inlineCls, 'cursor-pointer')}
+                                    >
+                                        <option value="">Não informado</option>
+                                        <option value="M">Masculino</option>
+                                        <option value="F">Feminino</option>
+                                        <option value="O">Outro</option>
+                                    </select>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div className="flex flex-col gap-0.5">
+                                        <label className="text-[11px] text-muted-foreground font-medium">RG</label>
+                                        <input
+                                            value={rgVal}
+                                            onChange={e => setRgVal(e.target.value)}
+                                            onBlur={() => saveField('rg', rgVal)}
+                                            onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                                            className={inlineCls}
+                                            placeholder="Não informado"
+                                        />
+                                    </div>
+                                    <div className="flex flex-col gap-0.5">
+                                        <label className="text-[11px] text-muted-foreground font-medium">Órgão Emissor</label>
+                                        <input
+                                            value={rgOrgaoEmissorVal}
+                                            onChange={e => setRgOrgaoEmissorVal(e.target.value)}
+                                            onBlur={() => saveField('rgOrgaoEmissor', rgOrgaoEmissorVal)}
+                                            onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                                            className={inlineCls}
+                                            placeholder="SSP-SP"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-col gap-0.5">
+                                    <label className="text-[11px] text-muted-foreground font-medium">Nome da Mãe</label>
+                                    <input
+                                        value={nomeMaeVal}
+                                        onChange={e => setNomeMaeVal(e.target.value)}
+                                        onBlur={() => saveField('nomeMae', nomeMaeVal)}
+                                        onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                                        className={inlineCls}
+                                        placeholder="Não informado"
+                                    />
+                                </div>
+
+                                <div className="flex flex-col gap-0.5">
+                                    <label className="text-[11px] text-muted-foreground font-medium">Estado Civil</label>
+                                    <select
+                                        value={estadoCivilVal}
+                                        onChange={e => { setEstadoCivilVal(e.target.value); saveField('estadoCivil', e.target.value) }}
+                                        className={cn(inlineCls, 'cursor-pointer')}
+                                    >
+                                        <option value="">Não informado</option>
+                                        <option value="solteiro">Solteiro(a)</option>
+                                        <option value="casado">Casado(a)</option>
+                                        <option value="divorciado">Divorciado(a)</option>
+                                        <option value="viuvo">Viúvo(a)</option>
+                                        <option value="uniao_estavel">União Estável</option>
+                                    </select>
+                                </div>
+
+                                <div className="flex flex-col gap-0.5">
+                                    <label className="text-[11px] text-muted-foreground font-medium">Nacionalidade</label>
+                                    <input
+                                        value={nacionalidadeVal}
+                                        onChange={e => setNacionalidadeVal(e.target.value)}
+                                        onBlur={() => saveField('nacionalidade', nacionalidadeVal)}
+                                        onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                                        className={inlineCls}
+                                        placeholder="Brasileiro(a)"
+                                    />
+                                </div>
+
+                            </div>
+                        </div>
+
                     </div>
                 )}
 
@@ -2191,6 +2334,13 @@ function LeadProfile({ lead, enterpriseId }: { lead: Lead; enterpriseId: string 
                 )}
 
             </div>{/* fim área rolável */}
+
+            <VerificationDialog
+                leadId={lead.id}
+                enterpriseId={enterpriseId}
+                open={verificationOpen}
+                onOpenChange={setVerificationOpen}
+            />
 
         </div>
     )

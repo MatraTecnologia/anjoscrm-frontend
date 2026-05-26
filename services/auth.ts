@@ -181,3 +181,19 @@ export function useDeleteAccount() {
 export function useChangePassword() {
     return useMutation({ mutationFn: changePasswordFn })
 }
+
+async function forgotPasswordFn(email: string): Promise<void> {
+    await api.post('/auth/forget-password', { email, redirectTo: `${window.location.origin}/reset-password` })
+}
+
+async function resetPasswordFn(payload: { token: string; newPassword: string }): Promise<void> {
+    await api.post('/auth/reset-password', payload)
+}
+
+export function useForgotPassword() {
+    return useMutation({ mutationFn: forgotPasswordFn })
+}
+
+export function useResetPassword() {
+    return useMutation({ mutationFn: resetPasswordFn })
+}

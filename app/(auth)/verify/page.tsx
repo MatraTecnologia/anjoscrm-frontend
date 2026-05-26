@@ -3,12 +3,27 @@
 import Image from 'next/image'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { AIBackground } from '@/components/ai-background'
+import { GlassCard } from 'react-glass-ui'
+import { motion } from 'framer-motion'
 import { toast } from 'sonner'
 import { Mail, Loader2, CheckCircle2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { useSession, useResendVerification } from '@/services/auth'
+
+const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1]
+
+const fadeUp = (delay = 0) => ({
+    initial: { opacity: 0, y: 32 },
+    animate: { opacity: 1, y: 0 },
+    transition: { duration: 0.6, delay, ease: EASE },
+})
+
+const fadeIn = (delay = 0) => ({
+    initial: { opacity: 0 },
+    animate: { opacity: 1 },
+    transition: { duration: 0.8, delay, ease: 'easeOut' as const },
+})
 
 export default function VerifyPage() {
     const router = useRouter()
@@ -17,14 +32,12 @@ export default function VerifyPage() {
     const [sent, setSent] = useState(false)
     const [cooldown, setCooldown] = useState(0)
 
-    // Se email já verificado, redireciona pro fluxo de onboarding/dashboard
     useEffect(() => {
         if (!isLoading && session?.user?.emailVerified) {
             router.replace('/')
         }
     }, [session, isLoading, router])
 
-    // Cooldown countdown
     useEffect(() => {
         if (cooldown <= 0) return
         const timer = setTimeout(() => setCooldown((c) => c - 1), 1000)
@@ -49,13 +62,20 @@ export default function VerifyPage() {
 
     if (isLoading) {
         return (
-            <div className="flex min-h-svh items-center justify-center">
-                <Loader2 className="size-6 animate-spin text-muted-foreground" />
+            <div
+                className="relative min-h-screen w-full overflow-hidden flex items-center justify-center"
+                style={{
+                    backgroundImage: 'url(/background.png)',
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                    backgroundAttachment: 'fixed',
+                }}
+            >
+                <Loader2 className="size-6 animate-spin text-white/50" />
             </div>
         )
     }
 
-    // Sem sessão → redireciona pro cadastro
     if (!session) {
         router.replace('/register')
         return null
@@ -64,93 +84,190 @@ export default function VerifyPage() {
     const email = session.user.email
 
     return (
-        <div className="grid min-h-svh lg:grid-cols-2">
-            {/* Esquerda — conteúdo */}
-            <div className="flex flex-col gap-4 p-6 md:p-10">
-                <div className="flex justify-center md:justify-start">
-                    <a href="#" className="flex items-center gap-2">
-                        <Image src="/logo.png" alt="KinarCRM" width={28} height={28} className="w-7 h-7 object-contain" />
-                        <span className="font-semibold text-sm">KinarCRM</span>
-                    </a>
-                </div>
+        <div
+            className="relative min-h-screen w-full overflow-hidden"
+            style={{
+                backgroundImage: 'url(/background.png)',
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+                backgroundAttachment: 'fixed',
+            }}
+        >
+            {/* Logo 3D flutuando */}
+            <motion.div
+                className="hidden lg:block absolute select-none pointer-events-none"
+                style={{
+                    zIndex: 5,
+                    top: '55%',
+                    right: '100px',
+                    translateY: '-52%',
+                }}
+                initial={{ opacity: 0, x: 80, scale: 0.85 }}
+                animate={{ opacity: 1, x: 0, scale: 1 }}
+                transition={{ duration: 1, delay: 0.3, ease: EASE }}
+            >
+                <motion.div
+                    animate={{ y: [0, -18, 0], rotate: [0, 1.5, -1.5, 0] }}
+                    transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
+                >
+                    <motion.div
+                        animate={{ opacity: [0.7, 1, 0.7] }}
+                        transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                    >
+                        <Image
+                            src="/logo-3d.png"
+                            alt=""
+                            width={750}
+                            height={750}
+                            className="w-[500px] h-auto"
+                            style={{
+                                filter: 'drop-shadow(0 0 55px rgba(37,99,235,0.75)) drop-shadow(0 0 120px rgba(37,99,235,0.4))',
+                            }}
+                            priority
+                        />
+                    </motion.div>
+                </motion.div>
+            </motion.div>
 
-                <div className="flex flex-1 items-center justify-center">
-                    <div className="w-full max-w-xs flex flex-col gap-6">
-                        {/* Ícone */}
-                        <div className="flex justify-center">
-                            <div className="flex size-16 items-center justify-center rounded-full bg-muted">
-                                {sent
-                                    ? <CheckCircle2 className="size-8 text-green-500" />
-                                    : <Mail className="size-8 text-muted-foreground" />
-                                }
-                            </div>
-                        </div>
+            {/* Layout principal */}
+            <div className="relative min-h-screen flex items-center" style={{ zIndex: 10 }}>
+                <div className="w-full max-w-[1280px] mx-auto px-12 flex items-center">
 
-                        {/* Texto */}
-                        <div className="flex flex-col gap-1 text-center">
-                            <h1 className="text-2xl font-semibold tracking-tight">
-                                {sent ? 'E-mail reenviado!' : 'Verifique seu e-mail'}
-                            </h1>
-                            <p className="text-sm text-muted-foreground">
-                                {sent
-                                    ? 'Um novo link de verificação foi enviado para'
-                                    : 'Enviamos um link de verificação para'
-                                }
-                            </p>
-                            <p className="text-sm font-medium">{email}</p>
-                        </div>
-
-                        {/* Instruções */}
-                        <div className="rounded-lg border bg-muted/40 p-4 text-sm text-muted-foreground space-y-1">
-                            <p>1. Abra o e-mail enviado para o endereço acima.</p>
-                            <p>2. Clique em <strong>Verificar e-mail</strong>.</p>
-                            <p>3. Você será redirecionado automaticamente.</p>
-                        </div>
-
-                        {/* Reenviar */}
-                        <div className="flex flex-col gap-3">
-                            <Button
-                                onClick={handleResend}
-                                disabled={isPending || cooldown > 0}
-                                variant="outline"
-                                className="w-full"
-                            >
-                                {isPending
-                                    ? <><Loader2 className="size-4 animate-spin" /> Enviando...</>
-                                    : cooldown > 0
-                                        ? `Reenviar em ${cooldown}s`
-                                        : 'Reenviar e-mail de verificação'
-                                }
-                            </Button>
-
-                            <p className="text-center text-sm text-muted-foreground">
-                                Usar outra conta?{' '}
-                                <a
-                                    href="/login"
-                                    className="font-medium text-foreground underline-offset-4 hover:underline"
-                                >
-                                    Voltar ao login
-                                </a>
-                            </p>
-                        </div>
+                    {/* Esquerda — logo + tagline */}
+                    <div className="hidden lg:flex flex-col gap-6 w-[280px] flex-shrink-0">
+                        <motion.div {...fadeUp(0.1)}>
+                            <Image
+                                src="/logo.png"
+                                alt="KinarCRM"
+                                width={185}
+                                height={65}
+                                className="object-contain object-left"
+                                style={{ filter: 'brightness(10)' }}
+                            />
+                        </motion.div>
+                        <motion.p
+                            className="text-white/70 text-[15px] leading-relaxed font-light"
+                            {...fadeUp(0.25)}
+                        >
+                            Recuperamos oportunidades.<br />
+                            Transformamos dados em{' '}
+                            <span style={{ color: '#3b82f6' }}>receita</span>.
+                        </motion.p>
                     </div>
+
+                    {/* Centro — card */}
+                    <div className="flex-1 flex items-center justify-center">
+                        <motion.div
+                            style={{ width: 480, display: 'flex', flexDirection: 'column' }}
+                            initial={{ opacity: 0, y: 48, scale: 0.97 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            transition={{ duration: 0.7, delay: 0.15, ease: EASE }}
+                        >
+                            <GlassCard
+                                blur={28}
+                                distortion={60}
+                                chromaticAberration={0}
+                                borderRadius={22}
+                                borderSize={1}
+                                borderColor="rgba(120,170,255,0.35)"
+                                borderOpacity={1}
+                                backgroundColor="#0b1836"
+                                backgroundOpacity={0.15}
+                                innerLightBlur={80}
+                                innerLightSpread={4}
+                                innerLightColor="rgba(80,130,255,0.18)"
+                                innerLightOpacity={0.7}
+                                outerLightBlur={90}
+                                outerLightSpread={8}
+                                outerLightColor="rgba(37,99,235,0.4)"
+                                outerLightOpacity={0.65}
+                                padding="44px 36px"
+                            >
+                                <div className="flex flex-col gap-6">
+                                    {/* Ícone */}
+                                    <motion.div className="flex justify-center" {...fadeUp(0.2)}>
+                                        <div className="flex size-16 items-center justify-center rounded-full"
+                                            style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(120,170,255,0.2)' }}>
+                                            {sent
+                                                ? <CheckCircle2 className="size-8 text-green-400" />
+                                                : <Mail className="size-8 text-blue-400" />
+                                            }
+                                        </div>
+                                    </motion.div>
+
+                                    {/* Texto */}
+                                    <motion.div className="flex flex-col gap-1 text-center" {...fadeUp(0.3)}>
+                                        <h1 className="text-2xl font-semibold tracking-tight text-white">
+                                            {sent ? 'E-mail reenviado!' : 'Verifique seu e-mail'}
+                                        </h1>
+                                        <p className="text-sm text-white/50 mt-1">
+                                            {sent
+                                                ? 'Um novo link de verificação foi enviado para'
+                                                : 'Enviamos um link de verificação para'
+                                            }
+                                        </p>
+                                        <p className="text-sm font-medium text-white/80">{email}</p>
+                                    </motion.div>
+
+                                    {/* Instruções */}
+                                    <motion.div
+                                        className="rounded-xl p-4 text-sm space-y-1"
+                                        style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(120,170,255,0.12)' }}
+                                        {...fadeUp(0.4)}
+                                    >
+                                        <p className="text-white/50">1. Abra o e-mail enviado para o endereço acima.</p>
+                                        <p className="text-white/50">2. Clique em <strong className="text-white/70">Verificar e-mail</strong>.</p>
+                                        <p className="text-white/50">3. Você será redirecionado automaticamente.</p>
+                                    </motion.div>
+
+                                    {/* Reenviar */}
+                                    <motion.div className="flex flex-col gap-3" {...fadeUp(0.5)}>
+                                        <Button
+                                            onClick={handleResend}
+                                            disabled={isPending || cooldown > 0}
+                                            className="w-full h-11 font-medium"
+                                            style={{
+                                                background: 'rgba(59,130,246,0.15)',
+                                                border: '1px solid rgba(59,130,246,0.4)',
+                                                color: '#93c5fd',
+                                            }}
+                                        >
+                                            {isPending
+                                                ? <><Loader2 className="size-4 animate-spin" /> Enviando...</>
+                                                : cooldown > 0
+                                                    ? `Reenviar em ${cooldown}s`
+                                                    : 'Reenviar e-mail de verificação'
+                                            }
+                                        </Button>
+
+                                        <p className="text-center text-sm text-white/30">
+                                            Usar outra conta?{' '}
+                                            <a
+                                                href="/login"
+                                                className="text-white/60 hover:text-white transition-colors"
+                                            >
+                                                Voltar ao login
+                                            </a>
+                                        </p>
+                                    </motion.div>
+                                </div>
+                            </GlassCard>
+                        </motion.div>
+                    </div>
+
+                    {/* Espaçador direito */}
+                    <div className="hidden lg:block w-[340px] flex-shrink-0" />
                 </div>
             </div>
 
-            {/* Direita — painel animado IA */}
-            <AIBackground className="hidden lg:block">
-                <div className="flex flex-col items-center justify-center gap-8 p-12 text-center h-full min-h-svh">
-                <img src="/logo.png" alt="KinarCRM" className="w-48 object-contain drop-shadow-2xl" />
-                <div className="flex flex-col gap-3 max-w-sm">
-                    <p className="text-3xl font-bold tracking-tight leading-snug" style={{ color: '#D0AB6D' }}>
-                        Feche mais negócios.<br />Deixe a IA qualificar.
-                    </p>
-                    <p className="text-sm leading-relaxed" style={{ color: 'rgba(208,171,109,0.55)' }}>
-                        O KinarCRM responde seus leads automaticamente e entrega os melhores para o seu time fechar.
-                    </p>
-                </div>
-                </div>
-            </AIBackground>
+            {/* Copyright */}
+            <motion.p
+                className="absolute bottom-6 left-12 text-white/20 text-xs"
+                style={{ zIndex: 10 }}
+                {...fadeIn(0.8)}
+            >
+                © 2024 KinarCRM. Todos os direitos reservados.
+            </motion.p>
         </div>
     )
 }

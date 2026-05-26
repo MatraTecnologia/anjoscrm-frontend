@@ -183,7 +183,7 @@ export function useChangePassword() {
 }
 
 async function forgotPasswordFn(email: string): Promise<void> {
-    await api.post('/auth/forget-password', { email, redirectTo: `${window.location.origin}/reset-password` })
+    await api.post('/auth/request-password-reset', { email, redirectTo: `${window.location.origin}/reset-password` })
 }
 
 async function resetPasswordFn(payload: { token: string; newPassword: string }): Promise<void> {

@@ -14,14 +14,16 @@ export type TranscriptSegment = {
 type ActiveCall = {
     phone: string
     leadName: string
+    leadId: string
     enterpriseId: string
+    userId?: string
 }
 
 type VoipStoreContextType = {
     activeCall: ActiveCall | null
     callSid: string | null
     transcript: TranscriptSegment[]
-    startCall: (phone: string, leadName: string, enterpriseId: string) => void
+    startCall: (phone: string, leadName: string, leadId: string, enterpriseId: string, userId?: string) => void
     setCallSid: (sid: string) => void
     endCall: () => void
 }
@@ -56,10 +58,10 @@ export function VoipStoreProvider({ children }: { children: React.ReactNode }) {
         }
     }, [callSid])
 
-    const startCall = useCallback((phone: string, leadName: string, enterpriseId: string) => {
+    const startCall = useCallback((phone: string, leadName: string, leadId: string, enterpriseId: string, userId?: string) => {
         setTranscript([])
         setCallSidState(null)
-        setActiveCall({ phone, leadName, enterpriseId })
+        setActiveCall({ phone, leadName, leadId, enterpriseId, userId })
     }, [])
 
     const setCallSid = useCallback((sid: string) => {

@@ -1123,6 +1123,7 @@ function ChatWindow({
                 <VoipCallPanel
                     phone={conv.lead.phone}
                     leadName={conv.lead.name}
+                    leadId={conv.lead.id}
                     enterpriseId={enterpriseId}
                     onClose={() => setCallPanelOpen(false)}
                 />

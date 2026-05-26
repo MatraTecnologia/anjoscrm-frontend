@@ -328,7 +328,7 @@ export default function LeadsPage() {
                                             <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
                                                 <button
                                                     title="Ligar"
-                                                    onClick={() => lead.phone && enterprise && startCall(lead.phone, lead.name, enterprise.id)}
+                                                    onClick={() => lead.phone && enterprise && startCall(lead.phone, lead.name, lead.id, enterprise.id)}
                                                     className="shrink-0 flex items-center justify-center size-5 rounded hover:bg-primary/10 hover:text-primary transition-colors"
                                                 >
                                                     <Phone className="size-3" />
@@ -435,7 +435,7 @@ export default function LeadsPage() {
 
                                             {lead.phone && (
                                                 <DropdownMenuItem
-                                                    onClick={() => enterprise && startCall(lead.phone!, lead.name, enterprise.id)}
+                                                    onClick={() => enterprise && startCall(lead.phone!, lead.name, lead.id, enterprise.id)}
                                                     className="gap-2.5 py-2"
                                                 >
                                                     <PhoneCall className="size-4 text-muted-foreground shrink-0" />

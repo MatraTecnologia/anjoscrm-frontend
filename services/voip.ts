@@ -19,6 +19,7 @@ export type VoipTokenResponse = {
     token: string
     connectionId: string
     twilioNumber: string
+    userId: string
 }
 
 // ─── API ──────────────────────────────────────────────────────────────────────
@@ -51,7 +52,7 @@ export type UseVoipCallReturn = {
     error: string | null
     isMuted: boolean
     callSid: string | null
-    startCall: (phone: string, enterpriseId: string) => Promise<void>
+    startCall: (phone: string, enterpriseId: string, leadId?: string, userId?: string) => Promise<void>
     hangup: () => void
     toggleMute: () => void
 }
@@ -109,7 +110,7 @@ export function useVoipCall(onCallSid?: (sid: string) => void): UseVoipCallRetur
         setIsMuted(next)
     }, [])
 
-    const startCall = useCallback(async (phone: string, enterpriseId: string) => {
+    const startCall = useCallback(async (phone: string, enterpriseId: string, leadId?: string, userId?: string) => {
         try {
             setStatus('connecting')
             setError(null)
@@ -121,6 +122,9 @@ export function useVoipCall(onCallSid?: (sid: string) => void): UseVoipCallRetur
 
             // Obtém token do backend
             const tokenData = await fetchVoipToken(enterpriseId)
+
+            // Usa o userId do token se não foi passado explicitamente
+            const resolvedUserId = userId ?? tokenData.userId
 
             // Cria e registra o Device
             // register() retorna Promise<void> na v2.x — await direto, sem timeout manual
@@ -141,6 +145,8 @@ export function useVoipCall(onCallSid?: (sid: string) => void): UseVoipCallRetur
                 params: {
                     To: phone,
                     connectionId: tokenData.connectionId,
+                    ...(leadId ? { leadId } : {}),
+                    ...(resolvedUserId ? { userId: resolvedUserId } : {}),
                 },
             })
 
@@ -173,6 +179,39 @@ export function useVoipCall(onCallSid?: (sid: string) => void): UseVoipCallRetur
     }, [hangup])
 
     return { status, duration, error, isMuted, callSid, startCall, hangup, toggleMute }
+}
+
+// ─── Voice Call History ───────────────────────────────────────────────────────
+
+export type VoiceCallRecord = {
+    id: string
+    callSid: string
+    leadId: string | null
+    userId: string | null
+    direction: 'OUTBOUND' | 'INBOUND'
+    fromNumber: string
+    toNumber: string
+    status: 'INITIATED' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED' | 'BUSY' | 'NO_ANSWER'
+    duration: number | null
+    recordingUrl: string | null
+    transcription: string | null
+    transcriptSegments: { speaker: 'agent' | 'lead'; text: string; timestamp: number }[] | null
+    startedAt: string
+    endedAt: string | null
+    user: { id: string; name: string; image: string | null } | null
+}
+
+export function useLeadVoiceCalls(leadId: string, enterpriseId: string) {
+    return useQuery({
+        queryKey: ['voice', 'calls', leadId],
+        queryFn: async () => {
+            const { data } = await api.get<VoiceCallRecord[]>(`/voice/calls?leadId=${leadId}`, {
+                headers: { 'X-Enterprise-Id': enterpriseId },
+            })
+            return data
+        },
+        enabled: !!leadId && !!enterpriseId,
+    })
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

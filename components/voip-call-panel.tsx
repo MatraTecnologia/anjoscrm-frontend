@@ -11,7 +11,9 @@ import { useVoipStore } from '@/stores/voip-store'
 interface Props {
     phone: string
     leadName: string
+    leadId: string
     enterpriseId: string
+    userId?: string
     onClose: () => void
 }
 
@@ -46,20 +48,21 @@ function PulsingRing({ active }: { active: boolean }) {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function VoipCallPanel({ phone, leadName, enterpriseId, onClose }: Props) {
+export function VoipCallPanel({ phone, leadName, leadId, enterpriseId, userId, onClose }: Props) {
     const { setCallSid, transcript } = useVoipStore()
     const { status, duration, error, isMuted, startCall, hangup, toggleMute } = useVoipCall(setCallSid)
 
     const transcriptEndRef = useRef<HTMLDivElement>(null)
-    // Usar refs para phone/enterpriseId evita que o efeito rode novamente se os valores mudarem
     const phoneRef = useRef(phone)
     const enterpriseIdRef = useRef(enterpriseId)
+    const leadIdRef = useRef(leadId)
+    const userIdRef = useRef(userId)
     const startCallRef = useRef(startCall)
     startCallRef.current = startCall
 
     // Inicia a chamada ao montar (uma única vez)
     useEffect(() => {
-        startCallRef.current(phoneRef.current, enterpriseIdRef.current)
+        startCallRef.current(phoneRef.current, enterpriseIdRef.current, leadIdRef.current, userIdRef.current)
     }, [])
 
     // Auto-scroll na transcrição
@@ -95,7 +98,7 @@ export function VoipCallPanel({ phone, leadName, enterpriseId, onClose }: Props)
 
     const handleRetry = useCallback((e: React.MouseEvent) => {
         e.stopPropagation()
-        startCallRef.current(phoneRef.current, enterpriseIdRef.current)
+        startCallRef.current(phoneRef.current, enterpriseIdRef.current, leadIdRef.current, userIdRef.current)
     }, [])
 
     return (

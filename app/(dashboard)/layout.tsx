@@ -50,7 +50,9 @@ function GlobalVoipPanel() {
         <VoipCallPanel
             phone={activeCall.phone}
             leadName={activeCall.leadName}
+            leadId={activeCall.leadId}
             enterpriseId={activeCall.enterpriseId}
+            userId={activeCall.userId}
             onClose={endCall}
         />
     )

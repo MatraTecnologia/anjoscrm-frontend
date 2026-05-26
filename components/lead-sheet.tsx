@@ -45,6 +45,7 @@ import { useLeadCustomFieldValues, useSaveLeadCustomFieldValues, useDealCustomFi
 import { VerificationDialog } from '@/components/verification-dialog'
 import { useLeadActivities, useCreateActivity, useUpdateActivity, useToggleActivityComplete, useDeleteActivity, type Activity } from '@/services/activities'
 import { useListActivityTypes } from '@/services/activity-types'
+import { useLeadVoiceCalls, formatDuration, type VoiceCallRecord } from '@/services/voip'
 
 // ─── Crop helpers ─────────────────────────────────────────────────────────────
 
@@ -1564,6 +1565,175 @@ function AgendamentosTab({ leadId, enterpriseId }: { leadId: string; enterpriseI
     )
 }
 
+// ─── Atendimentos tab ────────────────────────────────────────────────────────
+
+function AtendimentosTab({ leadId, enterpriseId }: { leadId: string; enterpriseId: string }) {
+    const [expanded, setExpanded] = useState<string | null>(null)
+    const { data: calls, isLoading } = useLeadVoiceCalls(leadId, enterpriseId)
+
+    const STATUS_LABEL: Record<string, string> = {
+        INITIATED: 'Iniciada',
+        IN_PROGRESS: 'Em andamento',
+        COMPLETED: 'Concluída',
+        FAILED: 'Falhou',
+        BUSY: 'Ocupado',
+        NO_ANSWER: 'Sem resposta',
+    }
+
+    const STATUS_COLOR: Record<string, string> = {
+        INITIATED: 'text-blue-500',
+        IN_PROGRESS: 'text-green-500',
+        COMPLETED: 'text-muted-foreground',
+        FAILED: 'text-destructive',
+        BUSY: 'text-amber-500',
+        NO_ANSWER: 'text-amber-500',
+    }
+
+    return (
+        <div className="flex flex-col h-full">
+            <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
+                <div>
+                    <p className="text-sm font-semibold">Atendimentos</p>
+                    <p className="text-xs text-muted-foreground">Histórico de ligações com este lead</p>
+                </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4">
+                {isLoading && (
+                    <div className="space-y-3">
+                        {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}
+                    </div>
+                )}
+
+                {!isLoading && (!calls || calls.length === 0) && (
+                    <div className="flex flex-col items-center justify-center h-48 gap-2 text-center">
+                        <Headphones className="size-8 text-muted-foreground/40" />
+                        <p className="text-sm font-medium text-muted-foreground">Nenhuma ligação registrada</p>
+                        <p className="text-xs text-muted-foreground/60">As ligações feitas para este lead aparecerão aqui</p>
+                    </div>
+                )}
+
+                {!isLoading && calls && calls.length > 0 && (
+                    <div className="space-y-3">
+                        {calls.map((call: VoiceCallRecord) => {
+                            const isOpen = expanded === call.id
+                            const hasTranscript = call.transcriptSegments && call.transcriptSegments.length > 0
+                            const hasTranscriptText = call.transcription
+
+                            return (
+                                <div key={call.id} className="rounded-xl border bg-card overflow-hidden">
+                                    {/* Header da chamada */}
+                                    <button
+                                        type="button"
+                                        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/40 transition-colors"
+                                        onClick={() => setExpanded(isOpen ? null : call.id)}
+                                    >
+                                        <div className={cn(
+                                            'size-8 rounded-full flex items-center justify-center shrink-0',
+                                            call.status === 'COMPLETED' ? 'bg-green-100 dark:bg-green-950' : 'bg-muted',
+                                        )}>
+                                            <Phone className={cn(
+                                                'size-3.5',
+                                                call.status === 'COMPLETED' ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground',
+                                            )} />
+                                        </div>
+
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2">
+                                                <span className={cn('text-xs font-medium', STATUS_COLOR[call.status] ?? 'text-muted-foreground')}>
+                                                    {STATUS_LABEL[call.status] ?? call.status}
+                                                </span>
+                                                {call.duration != null && (
+                                                    <span className="text-xs text-muted-foreground">
+                                                        · {formatDuration(call.duration)}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="flex items-center gap-2 mt-0.5">
+                                                {call.user ? (
+                                                    <span className="text-xs text-muted-foreground truncate">
+                                                        por {call.user.name}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-xs text-muted-foreground">por agente desconhecido</span>
+                                                )}
+                                                <span className="text-xs text-muted-foreground/50">·</span>
+                                                <span className="text-xs text-muted-foreground">
+                                                    {format(new Date(call.startedAt), "d 'de' MMM, HH:mm", { locale: ptBR })}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <ChevronDown className={cn(
+                                            'size-4 text-muted-foreground shrink-0 transition-transform',
+                                            isOpen && 'rotate-180',
+                                        )} />
+                                    </button>
+
+                                    {/* Detalhes expandidos */}
+                                    {isOpen && (
+                                        <div className="border-t px-4 py-3 space-y-3">
+                                            {/* Gravação */}
+                                            {call.recordingUrl && (
+                                                <div>
+                                                    <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">Gravação</p>
+                                                    <audio controls src={call.recordingUrl} className="w-full h-8" />
+                                                </div>
+                                            )}
+
+                                            {/* Transcrição por segmentos */}
+                                            {hasTranscript && (
+                                                <div>
+                                                    <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-2">Transcrição</p>
+                                                    <div className="space-y-1.5 max-h-60 overflow-y-auto">
+                                                        {call.transcriptSegments!.map((seg, i) => (
+                                                            <div key={i} className={cn(
+                                                                'flex gap-2',
+                                                                seg.speaker === 'agent' ? 'flex-row-reverse' : 'flex-row',
+                                                            )}>
+                                                                <div className={cn(
+                                                                    'max-w-[85%] px-2.5 py-1.5 rounded-xl text-xs leading-snug',
+                                                                    seg.speaker === 'agent'
+                                                                        ? 'bg-primary text-primary-foreground rounded-tr-sm'
+                                                                        : 'bg-muted rounded-tl-sm',
+                                                                )}>
+                                                                    <p className={cn(
+                                                                        'text-[9px] font-medium mb-0.5 opacity-70',
+                                                                        seg.speaker === 'agent' ? 'text-right' : 'text-left',
+                                                                    )}>
+                                                                        {seg.speaker === 'agent' ? (call.user?.name ?? 'Agente') : 'Lead'}
+                                                                    </p>
+                                                                    <p>{seg.text}</p>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Fallback: texto completo sem segmentos */}
+                                            {!hasTranscript && hasTranscriptText && (
+                                                <div>
+                                                    <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">Transcrição</p>
+                                                    <p className="text-xs text-muted-foreground whitespace-pre-wrap">{call.transcription}</p>
+                                                </div>
+                                            )}
+
+                                            {!call.recordingUrl && !hasTranscript && !hasTranscriptText && (
+                                                <p className="text-xs text-muted-foreground italic">Sem gravação ou transcrição disponível.</p>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )
+                        })}
+                    </div>
+                )}
+            </div>
+        </div>
+    )
+}
+
 // ─── Left panel ───────────────────────────────────────────────────────────────
 
 type ProfileSubTab = 'perfil' | 'endereco' | 'campos'
@@ -1824,7 +1994,7 @@ function LeadProfile({ lead, enterpriseId }: { lead: Lead; enterpriseId: string 
                                 variant="outline"
                                 size="sm"
                                 className="gap-1.5 text-xs h-7"
-                                onClick={() => lead.phone && startCall(lead.phone, lead.name, enterpriseId)}
+                                onClick={() => lead.phone && startCall(lead.phone, lead.name, lead.id, enterpriseId)}
                             >
                                 <Phone className="size-3.5" />
                                 Ligar
@@ -2473,7 +2643,7 @@ export function LeadSheet({ lead, enterpriseId, open, onOpenChange, defaultDealI
                                         <PlaceholderTab icon={Files} label="Arquivos" />
                                     </TabsContent>
                                     <TabsContent value="atendimentos" className="mt-0 h-full">
-                                        <PlaceholderTab icon={Headphones} label="Atendimentos" />
+                                        <AtendimentosTab leadId={lead.id} enterpriseId={enterpriseId} />
                                     </TabsContent>
                                     {selectedDeal && (
                                         <TabsContent value="deal-detail" className="mt-0 h-full">

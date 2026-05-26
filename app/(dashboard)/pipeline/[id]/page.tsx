@@ -2273,7 +2273,7 @@ export default function PipelinePage() {
     const { startCall } = useVoipStore()
     function handlePhoneClick(lead: DealLead) {
         if (!lead.phone) return
-        startCall(lead.phone, lead.name, enterpriseId)
+        startCall(lead.phone, lead.name, lead.id, enterpriseId)
     }
 
     function handleCreateStage() {

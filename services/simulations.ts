@@ -16,7 +16,7 @@ export type SimulationField = {
     placeholder: string | null
     required: boolean
     order: number
-    options: string[]
+    options: { label: string; score?: number }[]
     config: { min?: number; max?: number; prefix?: string; suffix?: string }
 }
 
@@ -32,6 +32,10 @@ export type SimulationTemplate = {
     updatedAt: string
     fields: SimulationField[]
     _count?: { responses: number; fields: number }
+    config?: {
+        scoringEnabled?: boolean
+        scoreRanges?: { min: number; max: number; label: string; color: string; message?: string }[]
+    }
 }
 
 export type SimulationAnswer = {
@@ -52,6 +56,11 @@ export type SimulationResponse = {
     completedAt: string | null
     createdAt: string
     template: { id: string; name: string; emoji: string; color: string }
+    totalScore: number | null
+    maxScore: number | null
+    scoreLabel: string | null
+    scoreColor: string | null
+    scoreMessage: string | null
 }
 
 export type PublicSimulation = {
@@ -59,6 +68,13 @@ export type PublicSimulation = {
     expired?: boolean
     template?: SimulationTemplate
     responseId?: string
+    // score fields (present when completed)
+    totalScore?: number | null
+    maxScore?: number | null
+    scoreLabel?: string | null
+    scoreColor?: string | null
+    scoreMessage?: string | null
+    answers?: { fieldId: string; label: string; value: unknown }[]
 }
 
 async function listTemplatesFn(enterpriseId: string): Promise<SimulationTemplate[]> {
@@ -131,8 +147,16 @@ async function getPublicSimulationFn(token: string): Promise<PublicSimulation> {
 
 async function submitSimulationFn({ token, answers }: {
     token: string; answers: SimulationAnswer[]
-}): Promise<void> {
-    await api.post(`/s/${token}/submit`, { answers })
+}): Promise<{
+    success: boolean
+    totalScore?: number
+    maxScore?: number
+    scoreLabel?: string
+    scoreColor?: string
+    scoreMessage?: string
+}> {
+    const { data } = await api.post(`/s/${token}/submit`, { answers })
+    return data
 }
 
 export function useSimulationTemplates(enterpriseId: string) {

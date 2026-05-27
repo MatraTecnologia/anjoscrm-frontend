@@ -2678,7 +2678,20 @@ function LeadSimulacoesTab({ leadId, enterpriseId }: { leadId: string; enterpris
                                                 </p>
                                             </div>
                                         </div>
-                                        {statusBadge(resp.status)}
+                                        <div className="flex items-center gap-1.5">
+                                            {statusBadge(resp.status)}
+                                            {resp.scoreLabel && (
+                                                <span
+                                                    className="text-xs font-medium px-2 py-0.5 rounded-full"
+                                                    style={{
+                                                        backgroundColor: (resp.scoreColor ?? '#3b82f6') + '20',
+                                                        color: resp.scoreColor ?? '#3b82f6',
+                                                    }}
+                                                >
+                                                    {resp.totalScore != null ? `${resp.totalScore}pts · ` : ''}{resp.scoreLabel}
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
 
                                     {resp.status === 'pending' && (

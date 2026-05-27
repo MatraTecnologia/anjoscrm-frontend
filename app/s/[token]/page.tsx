@@ -138,7 +138,7 @@ function FieldInput({
                         checked ? 'border-white bg-white' : 'border-white/40'
                     }`}
                 >
-                    {checked && <CheckCircle2 className="size-4 text-slate-900" />}
+                    {checked && <CheckCircle2 className="size-4 text-white" />}
                 </div>
                 <span className="text-lg font-medium">{field.label}</span>
             </button>
@@ -150,16 +150,17 @@ function FieldInput({
         return (
             <div className="flex flex-col gap-3">
                 {field.options.map(opt => {
-                    const isSelected = selected.includes(opt)
+                    const label = typeof opt === 'string' ? opt : opt.label
+                    const isSelected = selected.includes(label)
                     return (
                         <button
-                            key={opt}
+                            key={label}
                             type="button"
                             onClick={() => {
                                 onChange(
                                     isSelected
-                                        ? selected.filter(s => s !== opt)
-                                        : [...selected, opt]
+                                        ? selected.filter(s => s !== label)
+                                        : [...selected, label]
                                 )
                             }}
                             className={`flex items-center gap-4 px-5 py-4 rounded-xl border text-left transition-all ${
@@ -173,9 +174,9 @@ function FieldInput({
                                     isSelected ? 'border-white bg-white' : 'border-white/40'
                                 }`}
                             >
-                                {isSelected && <span className="block size-2.5 bg-slate-900 rounded-sm" />}
+                                {isSelected && <span className="block size-2.5 bg-blue-600 rounded-sm" />}
                             </div>
-                            <span className="text-base">{opt}</span>
+                            <span className="text-base">{label}</span>
                         </button>
                     )
                 })}
@@ -187,20 +188,23 @@ function FieldInput({
         const selected = value as string
         return (
             <div className="flex flex-col gap-3">
-                {field.options.map(opt => (
-                    <button
-                        key={opt}
-                        type="button"
-                        onClick={() => onChange(opt)}
-                        className={`px-5 py-4 rounded-xl border text-left text-base transition-all ${
-                            selected === opt
-                                ? 'border-white/70 bg-white/20 text-white font-medium'
-                                : 'border-white/20 bg-white/5 text-white/60 hover:border-white/40 hover:bg-white/10'
-                        }`}
-                    >
-                        {opt}
-                    </button>
-                ))}
+                {field.options.map(opt => {
+                    const label = typeof opt === 'string' ? opt : opt.label
+                    return (
+                        <button
+                            key={label}
+                            type="button"
+                            onClick={() => onChange(label)}
+                            className={`px-5 py-4 rounded-xl border text-left text-base transition-all ${
+                                selected === label
+                                    ? 'border-white/70 bg-white/20 text-white font-medium'
+                                    : 'border-white/20 bg-white/5 text-white/60 hover:border-white/40 hover:bg-white/10'
+                            }`}
+                        >
+                            {label}
+                        </button>
+                    )
+                })}
             </div>
         )
     }
@@ -228,6 +232,10 @@ export default function PublicSimulationPage({
     const [direction, setDirection] = useState<1 | -1>(1)
     const [validationError, setValidationError] = useState(false)
     const [submitted, setSubmitted] = useState(false)
+    const [submitResult, setSubmitResult] = useState<{
+        totalScore?: number; maxScore?: number
+        scoreLabel?: string; scoreColor?: string; scoreMessage?: string
+    } | null>(null)
 
     const fields = data?.template?.fields ?? []
     const totalFields = fields.length
@@ -296,7 +304,10 @@ export default function PublicSimulationPage({
         submitMutation.mutate(
             { token, answers: builtAnswers },
             {
-                onSuccess: () => setSubmitted(true),
+                onSuccess: (result) => {
+                    setSubmitResult(result)
+                    setSubmitted(true)
+                },
             }
         )
     }, [fields, answers, token, submitMutation])
@@ -317,7 +328,7 @@ export default function PublicSimulationPage({
     // ── Loading ──────────────────────────────────────────────────────────────
     if (isLoading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900">
+            <div className="min-h-screen flex items-center justify-center" style={{ backgroundImage: 'url(/background.png)', backgroundSize: 'cover', backgroundPosition: 'center' }}>
                 <Loader2 className="size-8 text-white/50 animate-spin" />
             </div>
         )
@@ -326,7 +337,7 @@ export default function PublicSimulationPage({
     // ── Error ────────────────────────────────────────────────────────────────
     if (isError || !data) {
         return (
-            <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900">
+            <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-[#080d1a]">
                 <div className="size-16 rounded-full bg-white/10 flex items-center justify-center">
                     <span className="text-2xl">🔍</span>
                 </div>
@@ -338,7 +349,7 @@ export default function PublicSimulationPage({
     // ── Expired ──────────────────────────────────────────────────────────────
     if (data.expired) {
         return (
-            <div className="min-h-screen flex flex-col items-center justify-center gap-6 bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 px-4">
+            <div className="min-h-screen flex flex-col items-center justify-center gap-6 px-4" style={{ backgroundImage: 'url(/background.png)', backgroundSize: 'cover', backgroundPosition: 'center' }}>
                 <motion.div
                     initial={{ scale: 0, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
@@ -362,8 +373,20 @@ export default function PublicSimulationPage({
 
     // ── Already completed ────────────────────────────────────────────────────
     if (data.completed || submitted) {
+        const score = submitResult ?? (data.completed ? {
+            totalScore: data.totalScore,
+            maxScore: data.maxScore,
+            scoreLabel: data.scoreLabel,
+            scoreColor: data.scoreColor,
+            scoreMessage: data.scoreMessage,
+        } : null)
+
+        const hasScore = score?.scoreLabel
+
         return (
-            <div className="min-h-screen flex flex-col items-center justify-center gap-6 bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 px-4">
+            <div className="min-h-screen flex flex-col items-center justify-center gap-6 px-4"
+                style={{ backgroundImage: 'url(/background.png)', backgroundSize: 'cover', backgroundPosition: 'center' }}>
+
                 <motion.div
                     initial={{ scale: 0, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
@@ -372,6 +395,7 @@ export default function PublicSimulationPage({
                 >
                     <CheckCircle2 className="size-10 text-emerald-400" />
                 </motion.div>
+
                 <motion.div
                     initial={{ opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -383,6 +407,56 @@ export default function PublicSimulationPage({
                         Entraremos em contato em breve.
                     </p>
                 </motion.div>
+
+                {/* Score result card */}
+                {hasScore && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        transition={{ delay: 0.5, type: 'spring', stiffness: 150, damping: 20 }}
+                        className="w-full max-w-sm rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm p-6 text-center space-y-4"
+                    >
+                        {/* Score badge */}
+                        <div className="flex flex-col items-center gap-2">
+                            <span
+                                className="text-lg font-bold px-5 py-2 rounded-full"
+                                style={{
+                                    backgroundColor: (score?.scoreColor ?? '#3b82f6') + '25',
+                                    color: score?.scoreColor ?? '#3b82f6',
+                                }}
+                            >
+                                {score?.scoreLabel}
+                            </span>
+                            {score?.maxScore != null && score.maxScore > 0 && (
+                                <div className="flex items-center gap-2 mt-1">
+                                    <span className="text-3xl font-bold text-white tabular-nums">
+                                        {score.totalScore ?? 0}
+                                    </span>
+                                    <span className="text-white/30 text-lg">/ {score.maxScore} pts</span>
+                                </div>
+                            )}
+                            {/* Score bar */}
+                            {score?.maxScore != null && score.maxScore > 0 && (
+                                <div className="w-full h-2 rounded-full bg-white/10 mt-1">
+                                    <motion.div
+                                        className="h-full rounded-full"
+                                        style={{ backgroundColor: score?.scoreColor ?? '#3b82f6' }}
+                                        initial={{ width: 0 }}
+                                        animate={{ width: `${Math.min(100, ((score.totalScore ?? 0) / score.maxScore) * 100)}%` }}
+                                        transition={{ delay: 0.8, duration: 0.8, ease: 'easeOut' }}
+                                    />
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Message */}
+                        {score?.scoreMessage && (
+                            <p className="text-white/70 text-sm leading-relaxed">
+                                {score.scoreMessage}
+                            </p>
+                        )}
+                    </motion.div>
+                )}
             </div>
         )
     }
@@ -390,7 +464,7 @@ export default function PublicSimulationPage({
     // ── No template ──────────────────────────────────────────────────────────
     if (!data.template || totalFields === 0) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900">
+            <div className="min-h-screen flex items-center justify-center" style={{ backgroundImage: 'url(/background.png)', backgroundSize: 'cover', backgroundPosition: 'center' }}>
                 <p className="text-white/50">Formulário sem perguntas.</p>
             </div>
         )
@@ -400,7 +474,15 @@ export default function PublicSimulationPage({
     const isSectionField = currentField?.type === 'SECTION'
 
     return (
-        <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900">
+        <div
+            className="min-h-screen flex flex-col"
+            style={{
+                backgroundImage: 'url(/background.png)',
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+                backgroundAttachment: 'fixed',
+            }}
+        >
             {/* ── Top bar ─────────────────────────────────────────────── */}
             <div className="w-full px-6 pt-6 pb-4 flex items-center gap-4 shrink-0">
                 <div className="flex items-center gap-2 mr-auto">
@@ -417,7 +499,7 @@ export default function PublicSimulationPage({
             {/* Progress bar */}
             <div className="w-full h-0.5 bg-white/10 shrink-0">
                 <motion.div
-                    className="h-full bg-white/60 rounded-full"
+                    className="h-full bg-blue-500 rounded-full"
                     animate={{ width: `${progress}%` }}
                     transition={{ ease: 'easeInOut', duration: 0.4 }}
                 />
@@ -491,7 +573,7 @@ export default function PublicSimulationPage({
                                     type="button"
                                     onClick={handleNext}
                                     disabled={submitMutation.isPending}
-                                    className="ml-auto bg-white text-slate-900 hover:bg-white/90 font-semibold px-6 gap-2 rounded-xl"
+                                    className="ml-auto bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 gap-2 rounded-xl"
                                 >
                                     {submitMutation.isPending ? (
                                         <Loader2 className="size-4 animate-spin" />

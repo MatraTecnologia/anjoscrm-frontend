@@ -122,4 +122,11 @@ export const keys = {
     subscriptions: {
         whatsapp: (enterpriseId: string) => ['enterprises', enterpriseId, 'subscriptions', 'whatsapp'] as const,
     },
+
+    simulations: {
+        all: (enterpriseId: string) => ['enterprises', enterpriseId, 'simulations'] as const,
+        detail: (id: string) => ['simulations', id] as const,
+        byLead: (leadId: string) => ['simulation-responses', 'lead', leadId] as const,
+        public: (token: string) => ['simulation-public', token] as const,
+    },
 }

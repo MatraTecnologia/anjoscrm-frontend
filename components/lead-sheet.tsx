@@ -46,6 +46,7 @@ import { VerificationDialog } from '@/components/verification-dialog'
 import { useLeadActivities, useCreateActivity, useUpdateActivity, useToggleActivityComplete, useDeleteActivity, type Activity } from '@/services/activities'
 import { useListActivityTypes } from '@/services/activity-types'
 import { useLeadVoiceCalls, formatDuration, type VoiceCallRecord } from '@/services/voip'
+import { useLeadSimulationResponses, useCreateSimulationResponse, useSimulationTemplates, type SimulationResponse } from '@/services/simulations'
 
 // ─── Crop helpers ─────────────────────────────────────────────────────────────
 
@@ -2516,6 +2517,230 @@ function LeadProfile({ lead, enterpriseId }: { lead: Lead; enterpriseId: string 
     )
 }
 
+// ─── LeadSimulacoesTab ────────────────────────────────────────────────────────
+
+function LeadSimulacoesTab({ leadId, enterpriseId }: { leadId: string; enterpriseId: string }) {
+    const [sendOpen, setSendOpen] = useState(false)
+    const [selectedTemplateId, setSelectedTemplateId] = useState('')
+    const [expiresAt, setExpiresAt] = useState('')
+    const [createdLink, setCreatedLink] = useState<string | null>(null)
+    const [copiedId, setCopiedId] = useState<string | null>(null)
+
+    const { data: responses, isLoading } = useLeadSimulationResponses(leadId, enterpriseId)
+    const { data: templates, isLoading: loadingTemplates } = useSimulationTemplates(enterpriseId)
+    const createResponse = useCreateSimulationResponse()
+
+    function handleCopy(text: string, id: string) {
+        navigator.clipboard.writeText(text)
+        setCopiedId(id)
+        setTimeout(() => setCopiedId(null), 2000)
+    }
+
+    function handleSend() {
+        if (!selectedTemplateId) return
+        createResponse.mutate(
+            {
+                templateId: selectedTemplateId,
+                enterpriseId,
+                leadId,
+                expiresAt: expiresAt || undefined,
+            },
+            {
+                onSuccess: (data) => {
+                    setCreatedLink(data.link)
+                },
+            }
+        )
+    }
+
+    function handleCloseSendDialog() {
+        setSendOpen(false)
+        setSelectedTemplateId('')
+        setExpiresAt('')
+        setCreatedLink(null)
+    }
+
+    const statusBadge = (status: SimulationResponse['status']) => {
+        if (status === 'completed') return <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/15">Respondida</Badge>
+        if (status === 'expired') return <Badge className="bg-slate-500/15 text-slate-400 border-slate-500/30 hover:bg-slate-500/15">Expirada</Badge>
+        return <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30 hover:bg-amber-500/15">Aguardando</Badge>
+    }
+
+    return (
+        <div className="flex flex-col h-full">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-3 border-b shrink-0">
+                <p className="text-sm font-semibold">Simulações enviadas</p>
+                <Button size="sm" variant="outline" onClick={() => setSendOpen(true)} className="gap-1.5 text-xs">
+                    <Send className="size-3" />
+                    Enviar simulação
+                </Button>
+            </div>
+
+            {/* Send dialog */}
+            <Dialog open={sendOpen} onOpenChange={v => { if (!v) handleCloseSendDialog() }}>
+                <DialogContent className="max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle>Enviar simulação</DialogTitle>
+                    </DialogHeader>
+
+                    {createdLink ? (
+                        <div className="flex flex-col gap-4 py-2">
+                            <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50 border">
+                                <p className="text-sm text-muted-foreground flex-1 truncate">{createdLink}</p>
+                                <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="size-7 shrink-0"
+                                    onClick={() => handleCopy(createdLink, 'new')}
+                                >
+                                    {copiedId === 'new' ? <Check className="size-3.5 text-emerald-400" /> : <Copy className="size-3.5" />}
+                                </Button>
+                            </div>
+                            <p className="text-xs text-muted-foreground text-center">Link copiado para a área de transferência!</p>
+                            <Button onClick={handleCloseSendDialog} className="w-full">Fechar</Button>
+                        </div>
+                    ) : (
+                        <>
+                            <div className="flex flex-col gap-4 py-2">
+                                <div className="flex flex-col gap-1.5">
+                                    <label className="text-sm font-medium">Template</label>
+                                    <select
+                                        className="w-full bg-background border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                                        value={selectedTemplateId}
+                                        onChange={e => setSelectedTemplateId(e.target.value)}
+                                    >
+                                        <option value="">Selecionar template...</option>
+                                        {templates?.filter(t => t.isActive).map(t => (
+                                            <option key={t.id} value={t.id}>
+                                                {t.emoji} {t.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="flex flex-col gap-1.5">
+                                    <label className="text-sm font-medium text-muted-foreground">
+                                        Expiração <span className="text-xs">(opcional)</span>
+                                    </label>
+                                    <input
+                                        type="datetime-local"
+                                        className="w-full bg-background border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary [color-scheme:dark]"
+                                        value={expiresAt}
+                                        onChange={e => setExpiresAt(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+                            <DialogFooter>
+                                <Button variant="outline" size="sm" onClick={handleCloseSendDialog}>Cancelar</Button>
+                                <Button
+                                    size="sm"
+                                    onClick={handleSend}
+                                    disabled={!selectedTemplateId || createResponse.isPending}
+                                >
+                                    {createResponse.isPending && <Loader2 className="size-3 animate-spin mr-1" />}
+                                    Criar link
+                                </Button>
+                            </DialogFooter>
+                        </>
+                    )}
+                </DialogContent>
+            </Dialog>
+
+            {/* List */}
+            <ScrollArea className="flex-1">
+                {isLoading ? (
+                    <div className="flex flex-col gap-3 p-5">
+                        {[1, 2].map(n => <Skeleton key={n} className="h-20 w-full rounded-xl" />)}
+                    </div>
+                ) : !responses?.length ? (
+                    <div className="flex flex-col items-center justify-center gap-3 py-16 text-center px-6">
+                        <div className="size-12 rounded-full bg-muted/50 flex items-center justify-center">
+                            <Send className="size-5 text-muted-foreground" />
+                        </div>
+                        <p className="text-sm text-muted-foreground">Nenhuma simulação enviada ainda</p>
+                        <Button size="sm" variant="outline" onClick={() => setSendOpen(true)} className="gap-1.5 text-xs mt-1">
+                            Enviar primeira simulação
+                        </Button>
+                    </div>
+                ) : (
+                    <div className="flex flex-col gap-3 p-5">
+                        {responses.map(resp => {
+                            const link = `${typeof window !== 'undefined' ? window.location.origin : ''}/s/${resp.token}`
+                            return (
+                                <div key={resp.id} className="rounded-xl border bg-muted/20 p-4 flex flex-col gap-3">
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-lg">{resp.template.emoji}</span>
+                                            <div>
+                                                <p className="text-sm font-medium leading-tight">{resp.template.name}</p>
+                                                <p className="text-xs text-muted-foreground mt-0.5">
+                                                    {format(new Date(resp.createdAt), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        {statusBadge(resp.status)}
+                                    </div>
+
+                                    {resp.status === 'pending' && (
+                                        <div className="flex items-center gap-2 bg-background/50 rounded-lg px-3 py-2 border">
+                                            <p className="text-xs text-muted-foreground flex-1 truncate font-mono">{link}</p>
+                                            <Button
+                                                size="icon"
+                                                variant="ghost"
+                                                className="size-6 shrink-0"
+                                                onClick={() => handleCopy(link, resp.id)}
+                                            >
+                                                {copiedId === resp.id ? <Check className="size-3 text-emerald-400" /> : <Copy className="size-3" />}
+                                            </Button>
+                                            <Button
+                                                size="icon"
+                                                variant="ghost"
+                                                className="size-6 shrink-0"
+                                                asChild
+                                            >
+                                                <a
+                                                    href={`https://wa.me/?text=${encodeURIComponent('Preencha sua simulação: ' + link)}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    title="Reenviar via WhatsApp"
+                                                >
+                                                    <MessageCircle className="size-3 text-emerald-500" />
+                                                </a>
+                                            </Button>
+                                        </div>
+                                    )}
+
+                                    {resp.status === 'completed' && resp.answers.length > 0 && (
+                                        <div className="flex flex-col gap-1.5">
+                                            {resp.answers.map(ans => (
+                                                <div key={ans.fieldId} className="flex gap-2 text-xs">
+                                                    <span className="text-muted-foreground shrink-0 min-w-[100px] max-w-[140px] truncate">{ans.label}:</span>
+                                                    <span className="text-foreground font-medium truncate">
+                                                        {Array.isArray(ans.value)
+                                                            ? (ans.value as string[]).join(', ')
+                                                            : typeof ans.value === 'boolean'
+                                                                ? (ans.value ? 'Sim' : 'Não')
+                                                                : String(ans.value)}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                            {resp.completedAt && (
+                                                <p className="text-xs text-muted-foreground mt-1">
+                                                    Respondida em {format(new Date(resp.completedAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )
+                        })}
+                    </div>
+                )}
+            </ScrollArea>
+        </div>
+    )
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 type LeadSheetProps = {
@@ -2571,6 +2796,7 @@ export function LeadSheet({ lead, enterpriseId, open, onOpenChange, defaultDealI
         { value: 'negocios', label: 'Negócios' },
         { value: 'arquivos', label: 'Arquivos' },
         { value: 'atendimentos', label: 'Atendimentos' },
+        { value: 'simulacoes', label: 'Simulações' },
     ]
 
     return (
@@ -2644,6 +2870,9 @@ export function LeadSheet({ lead, enterpriseId, open, onOpenChange, defaultDealI
                                     </TabsContent>
                                     <TabsContent value="atendimentos" className="mt-0 h-full">
                                         <AtendimentosTab leadId={lead.id} enterpriseId={enterpriseId} />
+                                    </TabsContent>
+                                    <TabsContent value="simulacoes" className="mt-0 h-full">
+                                        <LeadSimulacoesTab leadId={lead.id} enterpriseId={enterpriseId} />
                                     </TabsContent>
                                     {selectedDeal && (
                                         <TabsContent value="deal-detail" className="mt-0 h-full">

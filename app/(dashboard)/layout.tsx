@@ -12,6 +12,7 @@ import {
     MessageCircle,
     Calendar,
     Bell,
+    ClipboardList,
     Settings,
     Globe,
     ChevronsLeft,
@@ -33,6 +34,7 @@ const navItems = [
     { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { href: '/pipeline', icon: Filter, label: 'Funil' },
     { href: '/leads', icon: Users, label: 'Leads' },
+    { href: '/simulacoes', icon: ClipboardList, label: 'Simulações' },
     { href: '/chat', icon: MessageCircle, label: 'Chat' },
     { href: '/ia', icon: Bot, label: 'Minhas IAs' }]
 

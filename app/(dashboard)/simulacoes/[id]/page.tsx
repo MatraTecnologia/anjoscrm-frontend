@@ -526,7 +526,8 @@ function PreviewPanel({ template, fields }: PreviewPanelProps) {
 export default function SimulacaoEditorPage() {
     const params = useParams()
     const router = useRouter()
-    const { enterpriseId } = useEnterprise()
+    const { enterprise } = useEnterprise()
+    const enterpriseId = enterprise?.id ?? ''
     const templateId = params.id as string
 
     const { data: template, isLoading } = useSimulationTemplate(templateId, enterpriseId)

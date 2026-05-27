@@ -449,7 +449,8 @@ function EmptyState({ onNew }: { onNew: () => void }) {
 
 export default function SimulacoesPage() {
     const router = useRouter()
-    const { enterpriseId } = useEnterprise()
+    const { enterprise } = useEnterprise()
+    const enterpriseId = enterprise?.id ?? ''
     const { data: templates, isLoading } = useSimulationTemplates(enterpriseId)
     const [newOpen, setNewOpen] = useState(false)
 

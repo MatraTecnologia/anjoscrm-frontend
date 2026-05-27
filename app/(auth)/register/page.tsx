@@ -1,40 +1,154 @@
+'use client'
+
 import Image from 'next/image'
+import { GlassCard } from 'react-glass-ui'
+import { motion } from 'framer-motion'
 import { RegisterForm } from '@/components/register-form'
-import { AIBackground } from '@/components/ai-background'
+
+const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1]
+
+const fadeUp = (delay = 0) => ({
+    initial: { opacity: 0, y: 32 },
+    animate: { opacity: 1, y: 0 },
+    transition: { duration: 0.6, delay, ease: EASE },
+})
+
+const fadeIn = (delay = 0) => ({
+    initial: { opacity: 0 },
+    animate: { opacity: 1 },
+    transition: { duration: 0.8, delay, ease: 'easeOut' as const },
+})
 
 export default function RegisterPage() {
     return (
-        <div className="grid min-h-svh lg:grid-cols-2">
-            {/* Esquerda — formulário */}
-            <div className="flex flex-col gap-4 p-6 md:p-10">
-                <div className="flex justify-center md:justify-start">
-                    <a href="#" className="flex items-center gap-2">
-                        <Image src="/logo.png" alt="KinarCRM" width={28} height={28} className="w-7 h-7 object-contain" />
-                        <span className="font-semibold text-sm">KinarCRM</span>
-                    </a>
-                </div>
+        <div
+            className="relative min-h-screen w-full overflow-hidden"
+            style={{
+                backgroundImage: 'url(/background.png)',
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+                backgroundAttachment: 'fixed',
+            }}
+        >
+            {/* Logo 3D — flutuando atrás do card */}
+            <motion.div
+                className="hidden lg:block absolute select-none pointer-events-none"
+                style={{
+                    zIndex: 5,
+                    top: '55%',
+                    right: '100px',
+                    translateY: '-52%',
+                }}
+                initial={{ opacity: 0, x: 80, scale: 0.85 }}
+                animate={{ opacity: 1, x: 0, scale: 1 }}
+                transition={{ duration: 1, delay: 0.3, ease: EASE }}
+            >
+                <motion.div
+                    animate={{
+                        y: [0, -18, 0],
+                        rotate: [0, 1.5, -1.5, 0],
+                    }}
+                    transition={{
+                        duration: 5,
+                        repeat: Infinity,
+                        ease: 'easeInOut',
+                    }}
+                >
+                    <motion.div
+                        animate={{ opacity: [0.7, 1, 0.7] }}
+                        transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                    >
+                        <Image
+                            src="/logo-3d.png"
+                            alt=""
+                            width={750}
+                            height={750}
+                            className="w-[500px] h-auto"
+                            style={{
+                                filter: 'drop-shadow(0 0 55px rgba(37,99,235,0.75)) drop-shadow(0 0 120px rgba(37,99,235,0.4))',
+                            }}
+                            priority
+                        />
+                    </motion.div>
+                </motion.div>
+            </motion.div>
 
-                <div className="flex flex-1 items-center justify-center">
-                    <div className="w-full max-w-xs">
-                        <RegisterForm />
+            {/* Layout principal */}
+            <div
+                className="relative min-h-screen flex items-center"
+                style={{ zIndex: 10 }}
+            >
+                <div className="w-full max-w-[1280px] mx-auto px-12 flex items-center">
+
+                    {/* Esquerda — logo + tagline */}
+                    <div className="hidden lg:flex flex-col gap-6 w-[280px] flex-shrink-0">
+                        <motion.div {...fadeUp(0.1)}>
+                            <Image
+                                src="/logo.png"
+                                alt="KinarCRM"
+                                width={185}
+                                height={65}
+                                className="object-contain object-left"
+                                style={{ filter: 'brightness(10)' }}
+                            />
+                        </motion.div>
+                        <motion.p
+                            className="text-white/70 text-[15px] leading-relaxed font-light"
+                            {...fadeUp(0.25)}
+                        >
+                            Recuperamos oportunidades.<br />
+                            Transformamos dados em{' '}
+                            <span style={{ color: '#3b82f6' }}>receita</span>.
+                        </motion.p>
                     </div>
+
+                    {/* Centro — card */}
+                    <div className="flex-1 flex items-center justify-center">
+                        <motion.div
+                            style={{ width: 480, display: 'flex', flexDirection: 'column' }}
+                            initial={{ opacity: 0, y: 48, scale: 0.97 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            transition={{ duration: 0.7, delay: 0.15, ease: EASE }}
+                        >
+                            <GlassCard
+                                blur={28}
+                                distortion={60}
+                                chromaticAberration={0}
+                                borderRadius={22}
+                                borderSize={1}
+                                borderColor="rgba(120,170,255,0.35)"
+                                borderOpacity={1}
+                                backgroundColor="#0b1836"
+                                backgroundOpacity={0.15}
+                                innerLightBlur={80}
+                                innerLightSpread={4}
+                                innerLightColor="rgba(80,130,255,0.18)"
+                                innerLightOpacity={0.7}
+                                outerLightBlur={90}
+                                outerLightSpread={8}
+                                outerLightColor="rgba(37,99,235,0.4)"
+                                outerLightOpacity={0.65}
+                                padding="44px 36px"
+                            >
+                                <RegisterForm />
+                            </GlassCard>
+                        </motion.div>
+                    </div>
+
+                    {/* Espaçador direito */}
+                    <div className="hidden lg:block w-[340px] flex-shrink-0" />
+
                 </div>
             </div>
 
-            {/* Direita — painel animado IA */}
-            <AIBackground className="hidden lg:block">
-                <div className="flex flex-col items-center justify-center gap-8 p-12 text-center h-full min-h-svh">
-                    <img src="/logo.png" alt="KinarCRM" className="w-48 object-contain drop-shadow-2xl" />
-                    <div className="flex flex-col gap-3 max-w-sm">
-                        <p className="text-3xl font-bold tracking-tight leading-snug" style={{ color: '#D0AB6D' }}>
-                            Feche mais negócios.<br />Deixe a IA qualificar.
-                        </p>
-                        <p className="text-sm leading-relaxed" style={{ color: 'rgba(208,171,109,0.55)' }}>
-                            O KinarCRM responde seus leads automaticamente e entrega os melhores para o seu time fechar.
-                        </p>
-                    </div>
-                </div>
-            </AIBackground>
+            {/* Copyright */}
+            <motion.p
+                className="absolute bottom-6 left-12 text-white/20 text-xs"
+                style={{ zIndex: 10 }}
+                {...fadeIn(0.8)}
+            >
+                © 2024 KinarCRM. Todos os direitos reservados.
+            </motion.p>
         </div>
     )
 }

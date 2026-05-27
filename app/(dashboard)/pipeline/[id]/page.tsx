@@ -167,14 +167,14 @@ function DealCardBody({
 
     function handleMove(stageId: string) {
         updateDeal.mutate(
-            { id: deal.id, enterpriseId, stageId },
+            { id: deal.id, enterpriseId, stageId, sourceStageId: deal.stageId },
             { onError: (e) => toast.error(e.message) },
         )
     }
 
     function handleDelete() {
         deleteDeal.mutate(
-            { id: deal.id, enterpriseId },
+            { id: deal.id, enterpriseId, stageId: deal.stageId },
             {
                 onSuccess: () => { setSheetOpen(false); toast.success('Negócio excluído.') },
                 onError: (e) => toast.error(e.message),
@@ -2311,7 +2311,7 @@ export default function PipelinePage() {
         if (over.id === '__ganho__') {
             const stage = pipeline.stages.find(s => s.name.toLowerCase().includes('ganho'))
             if (stage && deal.stageId !== stage.id) {
-                updateDeal.mutate({ id: deal.id, enterpriseId, stageId: stage.id },
+                updateDeal.mutate({ id: deal.id, enterpriseId, stageId: stage.id, sourceStageId: deal.stageId },
                     { onError: (e) => toast.error(e.message) })
             }
             return
@@ -2321,7 +2321,7 @@ export default function PipelinePage() {
         if (over.id === '__perdido__') {
             const stage = pipeline.stages.find(s => s.name.toLowerCase().includes('perdido'))
             if (stage && deal.stageId !== stage.id) {
-                updateDeal.mutate({ id: deal.id, enterpriseId, stageId: stage.id },
+                updateDeal.mutate({ id: deal.id, enterpriseId, stageId: stage.id, sourceStageId: deal.stageId },
                     { onError: (e) => toast.error(e.message) })
             }
             return
@@ -2330,7 +2330,7 @@ export default function PipelinePage() {
         // Zona: Excluir
         if (over.id === '__excluir__') {
             deleteDeal.mutate(
-                { id: deal.id, enterpriseId },
+                { id: deal.id, enterpriseId, stageId: deal.stageId },
                 {
                     onSuccess: () => toast.success('Negócio excluído.'),
                     onError: (e) => toast.error(e.message),
@@ -2343,7 +2343,7 @@ export default function PipelinePage() {
         const targetStageId = over.id as string
         if (deal.stageId === targetStageId) return
         updateDeal.mutate(
-            { id: deal.id, enterpriseId, stageId: targetStageId },
+            { id: deal.id, enterpriseId, stageId: targetStageId, sourceStageId: deal.stageId },
             { onError: (e) => toast.error(e.message) },
         )
     }

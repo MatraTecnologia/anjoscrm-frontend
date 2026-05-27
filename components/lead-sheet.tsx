@@ -1677,7 +1677,7 @@ function AtendimentosTab({ leadId, enterpriseId }: { leadId: string; enterpriseI
                                             {call.recordingUrl && (
                                                 <div>
                                                     <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">Gravação</p>
-                                                    <audio controls src={call.recordingUrl} className="w-full h-8" />
+                                                    <audio controls src={`${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3333'}/voice/recording-proxy?url=${encodeURIComponent(call.recordingUrl)}`} className="w-full h-8" />
                                                 </div>
                                             )}
 

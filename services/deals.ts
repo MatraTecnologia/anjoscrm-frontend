@@ -129,6 +129,7 @@ async function updateDealFn({
     title?: string
     value?: number | null
     stageId?: string
+    sourceStageId?: string
 }): Promise<Deal> {
     const { data } = await api.patch<Deal>(
         `/deals/${id}`,
@@ -144,6 +145,7 @@ async function deleteDealFn({
 }: {
     id: string
     enterpriseId: string
+    stageId?: string
 }): Promise<void> {
     await api.delete(`/deals/${id}`, {
         headers: { 'X-Enterprise-Id': enterpriseId },
@@ -182,10 +184,11 @@ export function useUpdateDeal() {
     return useMutation({
         mutationFn: updateDealFn,
         onSuccess: (data, vars) => {
-            // Invalida stage original e nova (caso tenha movido)
+            // Invalida stage de destino (retornado pela API)
             qc.invalidateQueries({ queryKey: keys.deals.byStage(data.stageId) })
-            if (vars.stageId && vars.stageId !== data.stageId) {
-                qc.invalidateQueries({ queryKey: keys.deals.byStage(vars.stageId) })
+            // Invalida stage de origem para remover o deal de lá
+            if (vars.sourceStageId && vars.sourceStageId !== data.stageId) {
+                qc.invalidateQueries({ queryKey: keys.deals.byStage(vars.sourceStageId) })
             }
         },
     })
@@ -210,8 +213,10 @@ export function useDeleteDeal() {
     const qc = useQueryClient()
     return useMutation({
         mutationFn: deleteDealFn,
-        onSuccess: () => {
-            qc.invalidateQueries({ queryKey: ['stages'] })
+        onSuccess: (_data, vars) => {
+            if (vars.stageId) {
+                qc.invalidateQueries({ queryKey: keys.deals.byStage(vars.stageId) })
+            }
         },
     })
 }
